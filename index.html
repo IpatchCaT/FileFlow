@@ -71,6 +71,12 @@ dialog pre{white-space:pre-wrap;max-height:55vh;overflow:auto;margin:0 0 10px}di
 nav button.grp{font-weight:700}.sub{display:none;margin:0 0 4px 12px;border-left:1px solid var(--line)}.sub.open{display:block}
 .drop.mini{padding:10px;text-align:left;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 @media (max-width:760px){.sub.open{display:flex}.sub{margin:0;border-left:0}}
+.grid{max-height:420px;user-select:none}
+#gT{border-collapse:separate;border-spacing:0;font-size:13px;width:auto;min-width:100%}
+#gT td,#gT th{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:3px 8px;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+#gT th.ch,#gT th.rh,#gT th.cn{background:var(--bg);color:var(--mute);text-align:center;font-weight:700;cursor:pointer;position:sticky}
+#gT th.ch{top:0;z-index:2}#gT th.rh{left:0;z-index:1;min-width:40px}#gT th.cn{top:0;left:0;z-index:3}
+#gT td.hd{font-weight:700;background:var(--bg)}#gT td.sel{background:rgba(224,145,47,.3)}#gT th.on{background:var(--acc);color:#1b1b1b}
 </style>
 </head>
 <body>
@@ -115,7 +121,9 @@ nav button.grp{font-weight:700}.sub{display:none;margin:0 0 4px 12px;border-left
 <label><input type="checkbox" id="sCase"> Case sensitive</label>
 <button class="b" id="sGo">Search</button><button class="b g" id="sReset">Reset</button></div>
 <div class="row"><input type="text" id="sHdr" placeholder="Header names, e.g. name, password" size="32"><button class="b" id="sShow">Show columns</button><span class="sm">Finds columns by header name (contains, any case) and lists every row of them below.</span></div>
-<div class="sc"><table><thead id="sH"></thead><tbody id="sB"></tbody></table></div></div>
+<div class="row"><button class="b" id="gCopy">Copy selection</button><label><input type="checkbox" id="gOne"> Put everything in one column</label><button class="b g" id="gAll">Select all</button><button class="b g" id="gClr">Clear selection</button><button class="b g" id="gAZ">Sort column A-Z</button><button class="b g" id="gZA">Sort column Z-A</button><span class="sm" id="gStat"></span></div>
+<div class="sm">Click or drag cells. Click a column letter or row number to select it; Ctrl+click adds more, Shift+click extends. Then press Ctrl+C or Copy selection and paste into Excel.</div>
+<div class="sc grid" id="gWrap" tabindex="0"><table id="gT"></table></div><div class="sm" id="gNote"></div></div>
 <div class="card"><div class="row"><label>Output <select id="sOM"><option value="col">Single column (one per line)</option><option value="txt">Single text block</option><option value="table">Filtered table</option></select></label>
 <label>Separator <select id="sSep"><option value="nl">New line</option><option value="comma">Comma</option><option value="tab">Tab</option><option value="custom">Custom</option></select></label><input type="text" id="sCust" placeholder="custom" size="6">
 <label><input type="checkbox" id="sDup"> Remove duplicates</label>
@@ -253,9 +261,39 @@ function fillSorter(pick){const fs=F.filter(f=>f.t==='S'),cur=$('#sFile').value;
 async function sLoad(){const f=get($('#sFile').value);if(!f)return;try{S.wb=XLSX.read(await f.blob.arrayBuffer(),{type:'array'});$('#sSheet').innerHTML=S.wb.SheetNames.map(n=>`<option>${esc(n)}</option>`).join('');sSheet()}catch(e){toast('Could not read '+f.name,1)}}
 function sSheet(){const a=XLSX.utils.sheet_to_json(S.wb.Sheets[$('#sSheet').value],{header:1,defval:''});S.hd=(a[0]||[]).map((h,i)=>String(h)||'Column '+(i+1));S.rows=a.slice(1);S.shown=S.rows;S.m=null;S.vals=null;S.hc=null;
  $('#sCols').innerHTML=S.hd.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');$('#sTxt').value='';$('#sCnt').textContent='';drawT()}
+let G={R:null,C:null,has:false,a:null,ac:null,ar:null,on:false,last:null};
+const colL=i=>{let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+const rng=(a,b)=>{const s=new Set();for(let i=Math.min(a,b);i<=Math.max(a,b);i++)s.add(i);return s};
 function drawT(){$('#sInfo').textContent=S.wb?`${S.rows.length} rows, ${S.hd.length} columns`:'Upload an Excel or CSV file above first.';
- $('#sH').innerHTML=S.hd.length?'<tr>'+S.hd.map((h,i)=>`<th class="s" data-c="${i}" title="Click to sort">${esc(h)}</th>`).join('')+'</tr>':'';
- $('#sB').innerHTML=S.shown.length?S.shown.slice(0,300).map(r=>'<tr>'+S.hd.map((_,i)=>{const v=r[i]??'',h=S.m&&S.use.includes(i)&&v!==''&&S.m(v);return `<td>${h?'<mark>'+esc(v)+'</mark>':esc(v)}</td>`}).join('')+'</tr>').join(''):`<tr><td class="empty">${S.vals?'No matches.':'Nothing to show yet.'}</td></tr>`}
+ G.R=G.C=null;G.has=false;G.a=G.ac=G.ar=null;const n=Math.min(S.shown.length,1000);
+ let h='<thead><tr><th class="cn" data-all="1" title="Select all">◢</th>'+S.hd.map((_,i)=>`<th class="ch" data-hc="${i}" title="Select column ${colL(i)}">${colL(i)}</th>`).join('')+'</tr></thead><tbody>';
+ h+='<tr><th class="rh" data-hr="0" title="Select row 1">1</th>'+S.hd.map((x,i)=>`<td class="hd" data-r="0" data-c="${i}">${esc(x)}</td>`).join('')+'</tr>';
+ for(let r=0;r<n;r++){const row=S.shown[r];h+=`<tr><th class="rh" data-hr="${r+1}" title="Select row ${r+2}">${r+2}</th>`+S.hd.map((_,i)=>{const v=row[i]??'',hit=S.m&&S.use.includes(i)&&v!==''&&S.m(v);return `<td data-r="${r+1}" data-c="${i}">${hit?'<mark>'+esc(v)+'</mark>':esc(v)}</td>`}).join('')+'</tr>'}
+ $('#gT').innerHTML=S.hd.length?h+'</tbody>':'<tbody><tr><td class="empty">Nothing to show yet.</td></tr></tbody>';
+ $('#gNote').textContent=S.shown.length>n?`Showing the first ${n} of ${S.shown.length} rows. Selecting a whole column or row still copies every row.`:(S.vals&&!S.shown.length?'No matches.':'');gStatus()}
+function gStatus(){$('#gStat').textContent=G.has?`${G.R===null?S.shown.length+1:G.R.size} rows × ${G.C===null?S.hd.length:G.C.size} columns selected`:'No selection'}
+function gApply(){$$('#gT td[data-r]').forEach(td=>{td.classList.toggle('sel',G.has&&(G.R===null||G.R.has(+td.dataset.r))&&(G.C===null||G.C.has(+td.dataset.c)))});
+ $$('#gT th.ch').forEach(t=>t.classList.toggle('on',G.has&&G.C!==null&&G.C.has(+t.dataset.hc)));$$('#gT th.rh').forEach(t=>t.classList.toggle('on',G.has&&G.R!==null&&G.R.has(+t.dataset.hr)));gStatus()}
+function gText(){if(!G.has)throw new Error('Select cells first: click or drag, or click column letters and row numbers.');
+ const rows=[],cols=[];for(let r=0;r<=S.shown.length;r++)if(G.R===null||G.R.has(r))rows.push(r);S.hd.forEach((_,c)=>{if(G.C===null||G.C.has(c))cols.push(c)});
+ const val=(r,c)=>String(r===0?S.hd[c]:(S.shown[r-1][c]??'')),q=v=>/[\t\n"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+ return $('#gOne').checked?rows.flatMap(r=>cols.map(c=>val(r,c))).filter(x=>x!=='').join('\n'):rows.map(r=>cols.map(c=>q(val(r,c))).join('\t')).join('\n')}
+async function cpx(t){try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();const ok=document.execCommand('copy');a.remove();if(!ok)throw new Error('Copy was blocked by the browser. Click inside the page and try again.')}}
+const gCopy=()=>run(null,async()=>{const t=gText();await cpx(t);toast('Copied. Paste it into Excel or any text box.')});
+const gt=$('#gT');
+gt.addEventListener('mousedown',e=>{const el=e.target.closest('td[data-r],th[data-hc],th[data-hr],th[data-all]');if(!el)return;e.preventDefault();$('#gWrap').focus();const ctrl=e.ctrlKey||e.metaKey;
+ if(el.dataset.all){G.has=true;G.R=G.C=null}
+ else if(el.dataset.hc!==undefined){const c=+el.dataset.hc;if(e.shiftKey&&G.ac!==null){G.C=rng(G.ac,c);G.R=null}else if(ctrl&&G.has&&G.C&&G.R===null)G.C.add(c);else{G.C=new Set([c]);G.R=null}G.ac=c;G.has=true}
+ else if(el.dataset.hr!==undefined){const r=+el.dataset.hr;if(e.shiftKey&&G.ar!==null){G.R=rng(G.ar,r);G.C=null}else if(ctrl&&G.has&&G.R&&G.C===null)G.R.add(r);else{G.R=new Set([r]);G.C=null}G.ar=r;G.has=true}
+ else{const r=+el.dataset.r,c=+el.dataset.c;if(e.shiftKey&&G.a){G.R=rng(G.a[0],r);G.C=rng(G.a[1],c)}else{G.a=[r,c];G.R=new Set([r]);G.C=new Set([c])}G.has=true;G.on=true;G.last=r+','+c}
+ gApply()});
+gt.addEventListener('mouseover',e=>{if(!G.on||!G.a)return;const el=e.target.closest('td[data-r]');if(!el)return;const k=el.dataset.r+','+el.dataset.c;if(k===G.last)return;G.last=k;G.R=rng(G.a[0],+el.dataset.r);G.C=rng(G.a[1],+el.dataset.c);gApply()});
+document.addEventListener('mouseup',()=>{G.on=false});
+$('#gWrap').addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const k=e.key.toLowerCase();if(k==='c'){e.preventDefault();gCopy()}else if(k==='a'){e.preventDefault();G.has=true;G.R=G.C=null;gApply()}});
+$('#gCopy').onclick=gCopy;$('#gAll').onclick=()=>{G.has=true;G.R=G.C=null;gApply()};$('#gClr').onclick=()=>{G.has=false;gApply()};
+const gSort=d=>run(null,async()=>{if(!G.has||G.C===null||!G.C.size)throw new Error('Click a column letter first, then sort.');const c=Math.min(...G.C),keep=new Set([c]);
+ S.shown=[...S.shown].sort((x,y)=>String(x[c]??'').localeCompare(String(y[c]??''),undefined,{numeric:true})*d);drawT();G.has=true;G.R=null;G.C=keep;G.ac=c;gApply()});
+$('#gAZ').onclick=()=>gSort(1);$('#gZA').onclick=()=>gSort(-1);
 function matcher(){const kws=$('#sKw').value.split('\n').map(s=>s.trim()).filter(Boolean);if(!kws.length)throw new Error('Enter at least one keyword.');const m=$('#sMode').value,cs=$('#sCase').checked;
  const ts=kws.map(k=>{if(m==='regex'){let r;try{r=new RegExp(k,cs?'':'i')}catch(e){throw new Error('Invalid regex: '+k)}return v=>r.test(v)}
   const kk=cs?k:k.toLowerCase();return v=>{v=cs?v:v.toLowerCase();return m==='exact'?v===kk:m==='starts'?v.startsWith(kk):v.includes(kk)}});return v=>ts.some(t=>t(String(v)))}
@@ -275,7 +313,7 @@ function sOutH(){const c=S.hc;let rows=S.rows.filter(r=>c.some(i=>r[i]!==''));co
  const om=$('#sOM').value,sep={nl:'\n',comma:', ',tab:'\t',custom:$('#sCust').value}[$('#sSep').value],hn=c.map(i=>S.hd[i]),cl=c.map(i=>rows.map(r=>String(r[i])).filter(x=>x!==''));
  S.hrows=[hn,...rows.map(r=>c.map(i=>r[i]))];S.shown=rows;
  $('#sTxt').value=om==='table'?S.hrows.map(r=>r.join('\t')).join('\n'):om==='col'?hn.map((h,k)=>h+'\n'+cl[k].join('\n')).join('\n\n'):hn.map((h,k)=>h+': '+cl[k].join(sep)).join('\n');
- $('#sCnt').textContent=`${rows.length} rows from ${c.length} column(s): ${hn.join(', ')}`;drawT()}
+ $('#sCnt').textContent=`${rows.length} rows from ${c.length} column(s): ${hn.join(', ')}`;drawT();G.has=true;G.R=null;G.C=new Set(c);gApply()}
 function sGet(){if(S.hc)return S.hrows;if(!S.vals)throw new Error('Run a search first.');return $('#sOM').value==='table'?[S.hd,...S.shown]:S.out.map(x=>[x])}
 function sXl(csv){const ws=XLSX.utils.aoa_to_sheet(sGet());if(csv)return XLSX.utils.sheet_to_csv(ws);const b=XLSX.utils.book_new();XLSX.utils.book_append_sheet(b,ws,'Results');return XLSX.write(b,{type:'array',bookType:'xlsx'})}
 /* events */
