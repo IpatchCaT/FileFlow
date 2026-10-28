@@ -79,7 +79,7 @@ nav button.grp{font-weight:700}.sub{display:none;margin:0 0 4px 12px;border-left
 <nav id="nav"><button class="grp" data-g="1" aria-expanded="true">Library ▾</button><div class="sub open" id="sub"><button data-t="lib" class="on">All files</button><button data-t="merge">Merge</button><button data-t="conv">Convert</button><button data-t="ext">Extract</button><button data-t="sort">Data Sorter</button></div><button data-t="ts">Thermal analysis</button><button data-t="code">Code viewer</button></nav></aside>
 <main>
 <div class="top"><h1 style="font-size:15px;color:var(--mute);font-weight:500">Your files stay in this browser. Nothing is uploaded.</h1>
-<div class="r"><span id="used">0 KB used</span><button class="b g" id="clr">Clear cache</button><button class="b g" id="theme" title="Switch light or dark mode">Theme</button></div></div>
+<div class="r"><label class="sm"><input type="checkbox" id="askN" checked> Ask for a file name when downloading</label><span id="used">0 KB used</span><button class="b g" id="clr">Clear cache</button><button class="b g" id="theme" title="Switch light or dark mode">Theme</button></div></div>
 
 <section id="s-lib" class="on"><h2>Library</h2><p class="lead">Every file added in any tool is saved in your browser cache and listed here. Each tool also has its own upload, so you never have to start here.</p>
 <div class="card"><div class="drop" id="drop">Drop files here, or <button class="b" id="browse">Browse files</button><input type="file" id="fi" multiple hidden accept=".xlsx,.xls,.csv,.pdf,.docx,.txt,.json,.html,.htm,.css,.scss,.js,.mjs,.jsx,.ts,.tsx,.py,.xml,.svg,.vue,.java,.c,.cpp,.cs,.go,.rs,.php,.kt,.sql,.sh,.yml,.yaml,.md,image/*"><div class="sm">Excel, CSV, PDF, Word (.docx), text, JSON, images, code files (HTML, CSS, JS, Python and more)</div></div></div>
@@ -142,6 +142,7 @@ nav button.grp{font-weight:700}.sub{display:none;margin:0 0 4px 12px;border-left
 <div class="code"><pre class="gut" id="cG"></pre><pre id="cB">Open a file to see it here.</pre></div></div></section>
 </main></div>
 <dialog id="dlg"><div id="dBody"></div><button class="b" id="dClose">Close</button></dialog>
+<dialog id="rn"><h2 style="font-size:18px;margin-bottom:6px">Save file</h2><p class="sm" style="margin:0 0 8px">Keep the original name or type a new one.</p><input type="text" id="rnI" style="width:100%" aria-label="File name"><div class="row"><button class="b" id="rnOk">Save</button><button class="b g" id="rnKeep">Keep original name</button><button class="b g" id="rnNo">Cancel</button></div></dialog>
 <div id="toasts"></div>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -152,7 +153,12 @@ const fmt=b=>b>1e6?(b/1e6).toFixed(1)+' MB':Math.max(1,Math.round(b/1e3))+' KB';
 function toast(m,e){const t=document.createElement('div');t.className='toast'+(e?' err':'');t.textContent=m;$('#toasts').append(t);setTimeout(()=>t.remove(),4500)}
 async function run(b,fn){if(b)b.disabled=true;try{await fn()}catch(e){toast(e.message||String(e),1)}finally{if(b)b.disabled=false}}
 try{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}catch(e){}
-async function dl(data,name){if(DL===undefined){try{DL=await claude.use('downloads')}catch(e){DL=null}}
+function askName(orig){return new Promise(res=>{const d=$('#rn'),i=$('#rnI'),known=[...OK,'zip','html','svg','md'];let done=false;i.value=orig;
+ const fin=v=>{if(done)return;done=true;d.close();res(v)};
+ const clean=v=>{v=v.replace(/[\\\/:*?"<>|]/g,'').trim();if(!v)return orig;const e=ext(orig),x=v.includes('.')?ext(v):'';return !e||known.includes(x)?v:v+'.'+e};
+ $('#rnOk').onclick=()=>fin(clean(i.value));$('#rnKeep').onclick=()=>fin(orig);$('#rnNo').onclick=()=>fin(null);d.oncancel=()=>fin(null);i.onkeydown=e=>{if(e.key==='Enter')fin(clean(i.value))};
+ d.showModal();i.focus();i.select()})}
+async function dl(data,name){if($("#askN").checked){name=await askName(name);if(!name)return}if(DL===undefined){try{DL=await claude.use('downloads')}catch(e){DL=null}}
  if(DL){try{await DL.save({filename:name,data});toast('Saved '+name)}catch(e){if(e.code==='rejected_extension'){try{await DL.save({filename:name+'.txt',data});toast('Saved as '+name+'.txt because this file type can’t be saved directly')}catch(x){if(x.code!=='declined')toast('Could not save: '+(x.message||x.code),1)}}else if(e.code!=='declined')toast('Could not save: '+(e.message||e.code),1)}return}
  const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data]));a.download=name;a.click()}
 /* storage */
