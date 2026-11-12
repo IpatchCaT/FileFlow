@@ -644,13 +644,20 @@ function allRecords() {
 }
 
 function filteredRecords(records, includeStatus = true) {
-  const [date, direction] = sort.value.split("-");
+  const [field, direction] = sort.value.split("-");
+  const archiveScope = archiveFilter.value;
+  const date = field === "heading" ? "completed" : field;
   return records.filter(task =>
     (!headingFilter.value || task.headingId === headingFilter.value) &&
     matches(task) &&
     (!includeStatus || ((!statusFilter.value || taskStatus(task) === statusFilter.value) &&
-      (archiveFilter.value === "all" || task.archived === (archiveFilter.value === "archived"))))
+      (archiveScope === "all" || task.archived === (archiveScope === "archived"))))
   ).sort((a, b) => {
+    if (field === "heading") {
+      const byHeading = headingNameOrder.compare(a.heading, b.heading) || a.headingId.localeCompare(b.headingId);
+      if (byHeading) return direction === "asc" ? byHeading : -byHeading;
+      return (b.completed || "").localeCompare(a.completed || "") || b.added.localeCompare(a.added);
+    }
     if (!a[date]) return b[date] ? 1 : 0;
     if (!b[date]) return -1;
     return direction === "asc" ? a[date].localeCompare(b[date]) : b[date].localeCompare(a[date]);
@@ -757,6 +764,12 @@ function render({ headingId = headingFilter.value } = {}) {
   const visibleHeadings = headings.filter(heading => isRecords || Boolean(heading.archived) === (view === "archived"));
   headingFilter.replaceChildren(new Option("All Headings", ""), ...visibleHeadings.map(heading => new Option(heading.name, heading.id)));
   headingFilter.value = visibleHeadings.some(heading => heading.id === headingId) ? headingId : "";
+  if (isRecords && headingFilter.value && archiveFilter.value !== "all") {
+    const selectedHeading = visibleHeadings.find(heading => heading.id === headingFilter.value);
+    if (Boolean(selectedHeading.archived) !== (archiveFilter.value === "archived")) {
+      archiveFilter.value = selectedHeading.archived ? "archived" : "active";
+    }
+  }
   renderHeadingIndex();
   const records = allRecords();
   const active = records.filter(task => !task.archived);
@@ -767,14 +780,17 @@ function render({ headingId = headingFilter.value } = {}) {
   ]);
   const metrics = [
     ["Active headings", headings.filter(heading => !heading.archived).length, "dashboard", ""],
-    ...["Pending", "Waiting", "Completed"].map(status => [status, active.filter(task => taskStatus(task) === status).length, "records", status]),
+    ...["Pending", "Waiting", "Completed"].map(status => [status, (status === "Completed" ? records : active).filter(task => taskStatus(task) === status).length, "records", status]),
     ...deadlineMetrics
   ];
   byId("totals").replaceChildren(...metrics.map(([label, value, destination, filter]) => {
     const stat = button("", () => {
       clearFilters();
       view = destination;
-      if (destination === "records") statusFilter.value = filter;
+      if (destination === "records") {
+        statusFilter.value = filter;
+        if (filter === "Completed") showAllCompleted();
+      }
       if (destination === "today") todaySection = filter;
       render();
       byId(destination).focus();
@@ -961,18 +977,22 @@ function weekRange(value) {
   return { start: calendarDay(start), end: calendarDay(end) };
 }
 
-function weeklyView(records) {
-  const week = weekRange(selectedWeek || calendarDay());
+function weeklyGroups(records, week) {
   const completed = records.filter(task => {
     if (!task.completed) return false;
     const day = calendarDay(new Date(task.completed));
     return day >= week.start && day <= week.end;
   }).sort((a, b) => b.completed.localeCompare(a.completed));
-  const groups = [
+  return [
     { title: "Completed this week", tasks: completed },
     { title: "Currently pending", tasks: records.filter(task => !task.archived && taskStatus(task) === "Pending") },
     { title: "Currently waiting", tasks: records.filter(task => !task.archived && taskStatus(task) === "Waiting") }
   ];
+}
+
+function weeklyView(records) {
+  const week = weekRange(selectedWeek || calendarDay());
+  const groups = weeklyGroups(records, week);
   const panel = element("div");
   const tools = element("div", "weekly-tools");
   const pickerLabel = element("label", "", "Select a day in the week");
@@ -1095,12 +1115,36 @@ window.addEventListener("pageshow", () => {
   search.value = "";
   render();
 });
-for (const filter of [headingFilter, statusFilter, sort, archiveFilter]) filter.addEventListener("change", render);
+function showAllCompleted() {
+  archiveFilter.value = "all";
+  sort.value = "heading-asc";
+}
+
+statusFilter.addEventListener("change", () => {
+  if (statusFilter.value === "Completed") showAllCompleted();
+  render();
+});
+archiveFilter.addEventListener("change", () => {
+  const selected = headings.find(heading => heading.id === headingFilter.value);
+  if (selected && archiveFilter.value !== "all" && Boolean(selected.archived) !== (archiveFilter.value === "archived")) {
+    headingFilter.value = "";
+  }
+  render();
+});
+for (const filter of [headingFilter, sort]) filter.addEventListener("change", render);
 
 byId("export").addEventListener("click", () => {
   const records = allRecords();
-  const filtered = view === "today" ? todayGroups(records, calendarDay()).flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
-    filteredRecords(records, view === "records").filter(task => view === "records" || view === "weekly" || task.archived === (view === "archived"));
+  let filtered;
+  if (view === "today") {
+    const visible = todayGroups(records, calendarDay()).flatMap(group => group.tasks);
+    filtered = [...new Map(visible.map(task => [task.id, task])).values()];
+  } else if (view === "weekly") {
+    filtered = weeklyGroups(records, weekRange(selectedWeek || calendarDay())).flatMap(group => group.tasks);
+  } else {
+    filtered = filteredRecords(records, view === "records")
+      .filter(task => view === "records" || task.archived === (view === "archived"));
+  }
   const options = element("div");
   const picker = element("details", "export-picker");
   picker.hidden = true;
