@@ -7,19 +7,28 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js?v=4"></script>
-<script defer src="app.js?v=4"></script>
+<script defer src="app.js?v=5"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
 <a class="brand" href="./"><span class="mark" aria-hidden="true">✓</span>Task Recorder</a>
 <div class="toolbar">
-<input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search tasks…" aria-label="Search tasks">
-<button id="export" class="outline">Export to Excel</button>
-<button id="backup" class="outline">Backup &amp; Restore</button>
-<button id="new" class="primary">＋ New Heading</button>
+<div class="search-control">
+<input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search tasks…" aria-label="Search tasks" aria-keyshortcuts="/">
+<kbd aria-hidden="true">/</kbd>
+</div>
+<details class="menu data-menu">
+<summary>Data <span aria-hidden="true">⌄</span></summary>
+<div class="menu-actions">
+<button id="export">Export to Excel</button>
+<button id="backup">Backup &amp; Restore</button>
+</div>
+</details>
+<button id="new" class="outline">New heading</button>
+<button id="new-task" class="primary">＋ New task</button>
 </div></div></header>
 <main>
 <section class="intro">
@@ -32,6 +41,7 @@
 <select id="heading-filter" aria-label="Filter by heading"></select>
 <select id="status-filter" aria-label="Filter by status" hidden><option value="">All statuses</option><option>Pending</option><option>Waiting</option><option>Completed</option></select>
 <select id="archive-filter" aria-label="Filter by archive status" hidden><option value="active">Active headings</option><option value="archived">Archived headings</option><option value="all">All headings</option></select>
+<button id="clear-filters" class="clear-filters" hidden>Clear filters</button>
 <select id="sort" aria-label="Sort records" hidden><option value="added-desc">Added · newest</option><option value="added-asc">Added · oldest</option><option value="completed-desc">Completed · newest</option><option value="completed-asc">Completed · oldest</option></select>
 </div>
 </div>

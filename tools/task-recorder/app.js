@@ -21,6 +21,7 @@ let storageIssue = "";
 let submitDialog;
 let undoDeletion;
 let selectedWeek = "";
+let todaySection = "";
 
 const views = {
   dashboard: ["Work dashboard", "Organise your work and check off tasks as you go."],
@@ -299,7 +300,6 @@ function taskRow(heading, task, siblings, showHeading = false) {
     save();
   };
   const actions = [
-    ["Edit task", () => editTask(task)],
     ["Move up", () => shift(-1), showHeading || position === 0],
     ["Move down", () => shift(1), showHeading || position === siblings.length - 1],
     ["Move to heading", () => moveTask(heading, task), !headings.some(item => item !== heading && !item.archived)],
@@ -313,9 +313,13 @@ function taskRow(heading, task, siblings, showHeading = false) {
   ];
   const reference = webLink(task.link);
   if (reference) {
-    actions.splice(1, 0, ["Open reference link", () => window.open(reference, "_blank", "noopener,noreferrer")]);
+    actions.unshift(["Open reference link", () => window.open(reference, "_blank", "noopener,noreferrer")]);
   }
-  row.append(label, menu(`Actions for ${task.text}`, actions));
+  const controls = element("div", "task-controls");
+  const edit = button("Edit", () => editTask(task), "task-edit");
+  edit.setAttribute("aria-label", `Edit task: ${task.text}`);
+  controls.append(edit, menu(`Actions for ${task.text}`, actions));
+  row.append(label, controls);
   return row;
 }
 
@@ -465,21 +469,37 @@ function render() {
   }
   statusFilter.hidden = sort.hidden = archiveFilter.hidden = !isRecords;
   headingFilter.hidden = view === "weekly";
-  search.hidden = view === "weekly";
+  search.closest(".search-control").hidden = view === "weekly";
   const selected = headingFilter.value;
   const visibleHeadings = headings.filter(heading => isRecords || Boolean(heading.archived) === (view === "archived"));
   headingFilter.replaceChildren(new Option("All Headings", ""), ...visibleHeadings.map(heading => new Option(heading.name, heading.id)));
   headingFilter.value = visibleHeadings.some(heading => heading.id === selected) ? selected : "";
   const records = allRecords();
   const active = records.filter(task => !task.archived);
-  byId("totals").replaceChildren(...[
-    ["Active headings", headings.filter(heading => !heading.archived).length],
-    ...["Pending", "Waiting", "Completed"].map(status => [status, active.filter(task => taskStatus(task) === status).length])
-  ].map(([label, value]) => {
-    const stat = element("div", "stat");
+  const today = calendarDay();
+  const dueFollowUps = active.filter(task => !task.completed && task.waiting && task.followUp && task.followUp <= today).length;
+  const metrics = [
+    ["Active headings", headings.filter(heading => !heading.archived).length, "dashboard", ""],
+    ...["Pending", "Waiting", "Completed"].map(status => [status, active.filter(task => taskStatus(task) === status).length, "records", status]),
+    ["Follow-ups due", dueFollowUps, "today", "Follow-ups"]
+  ];
+  byId("totals").replaceChildren(...metrics.map(([label, value, destination, filter]) => {
+    const stat = button("", () => {
+      clearFilters();
+      view = destination;
+      if (destination === "records") statusFilter.value = filter;
+      if (destination === "today") todaySection = filter;
+      render();
+      byId(destination).focus();
+    }, "stat");
     stat.append(element("strong", "", value), document.createTextNode(label));
+    stat.setAttribute("aria-label", `${label}: ${value}`);
     return stat;
   }));
+  const hasFilters = search.value !== "" || (view !== "weekly" && headingFilter.value !== "") ||
+    (isRecords && (statusFilter.value !== "" || archiveFilter.value !== "active" || sort.value !== "added-desc")) ||
+    (view === "today" && todaySection !== "");
+  byId("clear-filters").hidden = !hasFilters || view === "weekly";
 
   if (isRecords) {
     content.replaceChildren(recordsTable(filteredRecords(records)));
@@ -522,7 +542,7 @@ function duplicateHeading(heading) {
   });
 }
 
-function editTask(task) {
+function editTask(task, creating = false) {
   const panel = element("div", "editor-fields");
   function field(label, control, value, type, maxLength) {
     const wrapper = element("label", "", label);
@@ -536,6 +556,12 @@ function editTask(task) {
     return control;
   }
 
+  const destination = element("select");
+  if (creating) {
+    for (const heading of headings.filter(item => !item.archived)) destination.add(new Option(heading.name, heading.id));
+    field("Heading", destination, headingFilter.value || destination.options[0].value);
+    if (!destination.value) destination.selectedIndex = 0;
+  }
   const title = field("Task name", element("input"), task.text, "text", 300);
   title.required = true;
   const statusSelect = element("select");
@@ -554,7 +580,7 @@ function editTask(task) {
   showWaitingFields();
   for (const input of [title, link]) input.addEventListener("input", () => input.setCustomValidity(""));
 
-  openDialog("Edit task", panel, "Save changes", () => {
+  openDialog(creating ? "New task" : "Edit task", panel, creating ? "Create task" : "Save changes", () => {
     const text = title.value.trim();
     if (!text) {
       title.setCustomValidity("Enter a task name.");
@@ -567,13 +593,22 @@ function editTask(task) {
       link.reportValidity();
       return false;
     }
+    const heading = creating ? headings.find(item => item.id === destination.value && !item.archived) : null;
+    if (creating && !heading) return false;
     Object.assign(task, {
       text, due: due.value, waiting: statusSelect.value === "Waiting",
       completed: statusSelect.value === "Completed" ? task.completed || new Date().toISOString() : null,
       waitingFor: waitingFor.value.trim(), followUp: followUp.value, notes: notes.value, link: reference
     });
-    save("Task updated.");
+    if (creating) {
+      heading.tasks.push(task);
+      clearFilters();
+      view = "dashboard";
+      headingFilter.value = heading.id;
+    }
+    save(creating ? "Task created." : "Task updated.");
   });
+  if (creating) title.focus();
 }
 
 function todayGroups() {
@@ -585,7 +620,7 @@ function todayGroups() {
     { title: "Due today", tasks: open.filter(task => task.due === today) },
     { title: "Follow-ups", tasks: open.filter(task => task.waiting && task.followUp && task.followUp <= today)
       .sort((a, b) => a.followUp.localeCompare(b.followUp)) }
-  ];
+  ].filter(group => !todaySection || group.title === todaySection);
 }
 
 function todayView() {
@@ -713,10 +748,36 @@ byId("undo").addEventListener("click", () => {
   save("Deletion undone.");
 });
 
+function clearFilters() {
+  search.value = "";
+  headingFilter.value = "";
+  statusFilter.value = "";
+  archiveFilter.value = "active";
+  sort.value = "added-desc";
+  todaySection = "";
+}
+
+byId("clear-filters").addEventListener("click", () => {
+  clearFilters();
+  render();
+  byId(view).focus();
+});
 byId("new").addEventListener("click", newHeading);
+byId("new-task").addEventListener("click", () => {
+  if (headings.some(heading => !heading.archived)) editTask(newTask(""), true);
+  else newHeading();
+});
+document.addEventListener("keydown", event => {
+  if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey || dialog.open || view === "weekly" ||
+      event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  event.preventDefault();
+  search.focus();
+});
+
 for (const id of Object.keys(views)) {
   byId(id).addEventListener("click", () => {
     view = id;
+    todaySection = "";
     render();
   });
 }
@@ -728,6 +789,7 @@ window.addEventListener("pageshow", () => {
 for (const filter of [headingFilter, statusFilter, sort, archiveFilter]) filter.addEventListener("change", render);
 
 byId("export").addEventListener("click", () => {
+  byId("export").closest("details").open = false;
   const records = allRecords();
   const filtered = view === "today" ? todayGroups().flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
     filteredRecords(records, view === "records").filter(task => view === "records" || view === "weekly" || task.archived === (view === "archived"));
@@ -754,6 +816,7 @@ byId("export").addEventListener("click", () => {
 });
 
 byId("backup").addEventListener("click", () => {
+  byId("backup").closest("details").open = false;
   const panel = element("div");
   const download = button("Download backup", () => {
     const data = JSON.stringify({ format: "fileflow-task-recorder", version: 2, headings }, null, 2);
