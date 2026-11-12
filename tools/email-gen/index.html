@@ -65,6 +65,8 @@ button,.outline{border:1px solid transparent;border-radius:8px;padding:9px 13px;
 .subject-row input{margin:0;padding:5px;border:0;background:transparent;font-weight:650}
 .paper textarea{border:0;margin:0;min-height:350px;line-height:1.65;padding:16px;background:transparent}
 .editor-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;color:var(--muted);font-size:12px;flex-wrap:wrap}
+.mail-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:0 16px 14px}
+.mail-actions .outline{font-size:12px}
 .editor-foot>div,.record-actions{display:flex;gap:7px;flex-wrap:wrap}
 .records{display:grid;gap:12px}
 .templates{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -106,6 +108,7 @@ dialog::backdrop{background:#17231cb0}
         <h2>Email details</h2>
         <label>Template<select id="template-select"></select></label>
         <label>Recipient name <small>Optional</small><input id="recipient" placeholder="e.g. Farah" maxlength="150"></label>
+        <label>Recipient email <small>Optional</small><input id="recipient-email" type="email" placeholder="name@example.com" maxlength="254"></label>
         <div id="dynamic-fields"></div>
         <label>Sender signature <small>Optional</small><textarea id="signature" rows="2" placeholder="Your name or email signature" maxlength="500"></textarea></label>
         <button type="submit" class="primary generate"><span aria-hidden="true">✧</span> Generate draft</button>
@@ -118,12 +121,17 @@ dialog::backdrop{background:#17231cb0}
           <textarea id="message" placeholder="Your draft will appear here. You can also write directly in the editor." maxlength="20000"></textarea>
         </div>
         <footer class="editor-foot"><span id="word-count">0 words</span><div><button type="button" class="outline" id="copy-email">Copy email</button> <button type="button" class="dark" id="save-draft">Save draft</button></div></footer>
+        <div class="mail-actions" role="group" aria-label="Open draft in webmail">
+          <button type="button" class="outline" data-webmail="gmail">Open in Gmail</button>
+          <button type="button" class="outline" data-webmail="outlookWork">Outlook (work or school)</button>
+          <button type="button" class="outline" data-webmail="outlookPersonal">Outlook (personal)</button>
+        </div>
       </section>
     </div>
   </section>
   <section id="drafts" hidden>
     <header class="page-head"><div><h1>Drafts</h1><p>Open a saved email or duplicate it for another recipient.</p></div><a class="outline" href="#compose" id="drafts-new">+ New draft</a></header>
-    <label class="search">Search drafts<input id="draft-search" type="search" placeholder="Subject, recipient, or email type"></label>
+    <label class="search">Search drafts<input id="draft-search" type="search" placeholder="Subject, recipient name or email, or type"></label>
     <div id="draft-list" class="records"></div>
   </section>
   <section id="templates" hidden>
@@ -330,6 +338,7 @@ function capture() {
     templateSnapshot: { subject: template.subject, body: template.body },
     type: template.type,
     recipient: byId("recipient").value,
+    recipientEmail: byId("recipient-email").value,
     signature: byId("signature").value,
     fields,
     subject: subject.value,
@@ -362,6 +371,7 @@ function loadDraft(draft = {}, templateId = draft.templateId) {
   renderOptions(templateId);
   renderFields(draft.fields);
   byId("recipient").value = draft.recipient || "";
+  byId("recipient-email").value = draft.recipientEmail || "";
   byId("signature").value = draft.signature || "";
   subject.value = draft.subject || "";
   message.value = draft.body || "";
@@ -406,7 +416,7 @@ function showPage() {
 function renderDrafts() {
   const query = byId("draft-search").value.trim().toLowerCase();
   const matches = state.drafts
-    .filter(draft => [draft.subject, draft.recipient, emailTypes[draft.type].name].join(" ").toLowerCase().includes(query))
+    .filter(draft => [draft.subject, draft.recipient, draft.recipientEmail, emailTypes[draft.type].name].join(" ").toLowerCase().includes(query))
     .sort((first, second) => second.updatedAt.localeCompare(first.updatedAt));
   const list = byId("draft-list");
   list.replaceChildren();
@@ -617,6 +627,38 @@ async function copy(text, success) {
     }
   }
   notify(success);
+}
+
+const webmailProviders = {
+  gmail: { compose: "https://mail.google.com/mail/?view=cm&fs=1", subjectKey: "su" },
+  outlookWork: { compose: "https://outlook.office.com/mail/deeplink/compose", subjectKey: "subject" },
+  outlookPersonal: { compose: "https://outlook.live.com/mail/0/deeplink/compose", subjectKey: "subject" }
+};
+
+function composeUrl(provider, recipient, title, body) {
+  const url = new URL(provider.compose);
+  if (recipient) url.searchParams.set("to", recipient);
+  url.searchParams.set(provider.subjectKey, title);
+  url.searchParams.set("body", body);
+  return url;
+}
+
+for (const control of document.querySelectorAll("[data-webmail]")) {
+  control.addEventListener("click", () => {
+    const recipient = byId("recipient-email");
+    if (!recipient.reportValidity()) return;
+    if (!subject.value.trim() && !message.value.trim()) {
+      notify("Write or generate an email before opening webmail.");
+      return;
+    }
+    const provider = webmailProviders[control.dataset.webmail];
+    const url = composeUrl(provider, recipient.value, subject.value, message.value);
+    if (url.href.length > 8000) {
+      notify("This draft is too long to open from a link. Use Copy email and paste it into your mail app.");
+      return;
+    }
+    window.open(url.href, "_blank", "noopener,noreferrer");
+  });
 }
 
 byId("copy-subject").addEventListener("click", () => copy(subject.value.trim(), "Subject copied."));
