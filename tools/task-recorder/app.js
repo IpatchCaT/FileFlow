@@ -6,6 +6,7 @@ const search = byId("search");
 const headingFilter = byId("heading-filter");
 const statusFilter = byId("status-filter");
 const sort = byId("sort");
+const archiveFilter = byId("archive-filter");
 const content = byId("content");
 const dialog = byId("dialog");
 const dialogBody = byId("dialog-body");
@@ -18,17 +19,56 @@ let headings = [];
 let view = "dashboard";
 let storageIssue = "";
 let submitDialog;
+let undoDeletion;
+let selectedWeek = "";
+
+const views = {
+  dashboard: ["Work dashboard", "Organise your work and check off tasks as you go."],
+  today: ["Today", "Review deadlines and follow-ups across active headings."],
+  records: ["Task records", "Search, filter, and export your task history."],
+  weekly: ["Weekly Summary", "Review completed work and share your current open tasks."],
+  archived: ["Archived headings", "Review finished projects or restore them to the dashboard."]
+};
+
+function calendarDay(date = new Date()) {
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateFromDay(value) {
+  return new Date(`${value}T12:00:00`);
+}
+
+function validDay(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(dateFromDay(value).getTime()) && calendarDay(dateFromDay(value)) === value;
+}
+
+const dateOnly = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const displayDay = value => value ? dateOnly.format(dateFromDay(value)) : "";
+const taskStatus = task => task.completed ? "Completed" : task.waiting ? "Waiting" : "Pending";
+
+function webLink(value) {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
 
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
-  if (!Array.isArray(saved)) throw new Error("Invalid task data");
-  headings = saved;
+  headings = normalizeHeadings(saved);
 } catch {
   storageIssue = "Saved records could not be loaded. Changes will be kept for this session only.";
 }
 
 function notify(message = "") {
   byId("notice").textContent = [storageIssue, message].filter(Boolean).join(" ");
+  byId("undo").hidden = !undoDeletion;
 }
 
 function downloadFile(blob, filename) {
@@ -44,9 +84,14 @@ function downloadFile(blob, filename) {
 
 function parseBackup(text) {
   const backup = JSON.parse(text);
-  if (backup?.format !== "fileflow-task-recorder" || backup.version !== 1 ||
-      !Array.isArray(backup.headings)) throw new Error("Invalid backup format");
+  if (backup?.format !== "fileflow-task-recorder" || ![1, 2].includes(backup.version)) {
+    throw new Error("Invalid backup format");
+  }
+  return normalizeHeadings(backup.headings);
+}
 
+function normalizeHeadings(data) {
+  if (!Array.isArray(data)) throw new Error("Invalid heading list");
   const ids = new Set();
   function validId(id) {
     if (typeof id !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(id) || ids.has(id)) return false;
@@ -57,16 +102,26 @@ function parseBackup(text) {
   const validDate = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
-  return backup.headings.map(heading => {
-    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks)) {
+  const optionalText = (value, max) => value === undefined || (typeof value === "string" && value.length <= max);
+  const optionalDay = value => value === undefined || value === "" || validDay(value);
+  const optionalFlag = value => value === undefined || typeof value === "boolean";
+  return data.map(heading => {
+    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks) || !optionalFlag(heading.archived)) {
       throw new Error("Invalid heading");
     }
     const tasks = heading.tasks.map(task => {
       if (!task || !validId(task.id) || !validText(task.text) || !validDate(task.added) ||
-          (task.completed !== null && !validDate(task.completed))) throw new Error("Invalid task");
-      return { id: task.id, text: task.text, added: task.added, completed: task.completed };
+          (task.completed !== null && !validDate(task.completed)) || !optionalFlag(task.waiting) ||
+          !optionalDay(task.due) || !optionalDay(task.followUp) || !optionalText(task.waitingFor, 300) ||
+          !optionalText(task.notes, 4000) || !optionalText(task.link, 2000) ||
+          (task.link && !webLink(task.link))) throw new Error("Invalid task");
+      return {
+        id: task.id, text: task.text, added: task.added, completed: task.completed,
+        due: task.due ?? "", followUp: task.followUp ?? "", waiting: Boolean(task.waiting),
+        waitingFor: task.waitingFor ?? "", notes: task.notes ?? "", link: task.link ?? ""
+      };
     });
-    return { id: heading.id, name: heading.name, tasks };
+    return { id: heading.id, name: heading.name, archived: Boolean(heading.archived), tasks };
   });
 }
 
@@ -103,7 +158,7 @@ function openDialog(title, field, confirmText, action) {
   byId("confirm").textContent = confirmText;
   submitDialog = action;
   dialog.showModal();
-  dialogBody.querySelector("input, select")?.focus();
+  dialogBody.querySelector("input, select, textarea")?.focus();
 }
 
 form.addEventListener("submit", async event => {
@@ -125,6 +180,7 @@ function textDialog(title, label, value, confirm, action) {
   const field = element("label", "", label);
   const input = element("input");
   input.autocomplete = "off";
+  input.spellcheck = false;
   input.required = true;
   input.maxLength = 300;
   input.value = value;
@@ -178,10 +234,13 @@ function menu(label, actions) {
 
 function removeHeading(heading) {
   const remove = () => {
-    headings = headings.filter(item => item !== heading);
+    const index = headings.indexOf(heading);
+    if (index < 0) return;
+    headings.splice(index, 1);
+    undoDeletion = () => headings.splice(index, 0, heading);
     expanded.delete(heading.id);
     drafts.delete(heading.id);
-    save();
+    save("Heading deleted.");
   };
   if (!heading.tasks.length) return remove();
   openDialog("Delete heading?", element("p", "", `“${heading.name}” and its ${heading.tasks.length} task(s) will be deleted.`), "Delete heading", remove);
@@ -191,7 +250,7 @@ function moveTask(heading, task) {
   const field = element("label", "", "Destination heading");
   const select = element("select");
   select.name = "destination";
-  for (const item of headings.filter(item => item !== heading)) {
+  for (const item of headings.filter(item => item !== heading && !item.archived)) {
     select.add(new Option(item.name, item.id));
   }
   field.append(select);
@@ -205,10 +264,11 @@ function moveTask(heading, task) {
 }
 
 function matches(task) {
-  return task.text.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase());
+  const query = search.value.trim().toLocaleLowerCase();
+  return [task.text, task.notes, task.link, task.waitingFor].some(value => value?.toLocaleLowerCase().includes(query));
 }
 
-function taskRow(heading, task, siblings) {
+function taskRow(heading, task, siblings, showHeading = false) {
   const row = element("li", task.completed ? "task done" : "task");
   const label = element("label");
   const checkbox = element("input");
@@ -216,10 +276,19 @@ function taskRow(heading, task, siblings) {
   checkbox.checked = Boolean(task.completed);
   checkbox.addEventListener("change", () => {
     task.completed = checkbox.checked ? new Date().toISOString() : null;
+    if (checkbox.checked) task.waiting = false;
     save();
     content.querySelector(`[data-task-id="${task.id}"] input`)?.focus();
   });
-  label.append(checkbox, element("span", "task-text", task.text));
+  const copy = element("span", "task-copy");
+  copy.append(element("span", "task-text", task.text));
+  const metadata = [];
+  if (showHeading) metadata.push(heading.name);
+  if (task.waiting && !task.completed) metadata.push(task.waitingFor ? `Waiting for ${task.waitingFor}` : "Waiting");
+  if (task.due) metadata.push(`${!task.completed && task.due < calendarDay() ? "Overdue" : "Due"} ${displayDay(task.due)}`);
+  if (task.waiting && task.followUp && !task.completed) metadata.push(`Follow-up ${displayDay(task.followUp)}`);
+  if (metadata.length) copy.append(element("small", "task-meta", metadata.join(" · ")));
+  label.append(checkbox, copy);
   row.dataset.taskId = task.id;
   const position = siblings.indexOf(task);
   const shift = offset => {
@@ -229,16 +298,24 @@ function taskRow(heading, task, siblings) {
     [heading.tasks[first], heading.tasks[second]] = [heading.tasks[second], heading.tasks[first]];
     save();
   };
-  row.append(label, menu(`Actions for ${task.text}`, [
-    ["Edit task", () => textDialog("Edit task", "Task", task.text, "Save changes", text => { task.text = text; save(); })],
-    ["Move up", () => shift(-1), position === 0],
-    ["Move down", () => shift(1), position === siblings.length - 1],
-    ["Move to heading", () => moveTask(heading, task), headings.length < 2],
+  const actions = [
+    ["Edit task", () => editTask(task)],
+    ["Move up", () => shift(-1), showHeading || position === 0],
+    ["Move down", () => shift(1), showHeading || position === siblings.length - 1],
+    ["Move to heading", () => moveTask(heading, task), !headings.some(item => item !== heading && !item.archived)],
     ["Delete task", () => {
-      heading.tasks = heading.tasks.filter(item => item !== task);
-      save();
+      const index = heading.tasks.indexOf(task);
+      if (index < 0) return;
+      heading.tasks.splice(index, 1);
+      undoDeletion = () => heading.tasks.splice(index, 0, task);
+      save("Task deleted.");
     }]
-  ]));
+  ];
+  const reference = webLink(task.link);
+  if (reference) {
+    actions.splice(1, 0, ["Open reference link", () => window.open(reference, "_blank", "noopener,noreferrer")]);
+  }
+  row.append(label, menu(`Actions for ${task.text}`, actions));
   return row;
 }
 
@@ -256,11 +333,17 @@ function headingCard(heading) {
   card.style.setProperty("--accent", accents[index % accents.length]);
   const header = element("div", "card-header");
   const title = element("div");
-  title.append(element("h2", "", heading.name), element("span", "pending", `${pending.length} pending`));
+  title.append(element("h2", "", heading.name), element("span", "pending", `${pending.filter(task => !task.waiting).length} pending · ${pending.filter(task => task.waiting).length} waiting`));
   header.append(title, menu(`Actions for ${heading.name}`, [
     ["Rename heading", () => textDialog("Rename heading", "Heading name", heading.name, "Save changes", name => { heading.name = name; save(); })],
     ["Move earlier", () => reorder(headings, heading, -1), index === 0],
     ["Move later", () => reorder(headings, heading, 1), index === headings.length - 1],
+    ["Duplicate heading", () => duplicateHeading(heading)],
+    [heading.archived ? "Restore heading" : "Archive heading", () => {
+      heading.archived = !heading.archived;
+      headingFilter.value = "";
+      save(heading.archived ? "Heading archived." : "Heading restored to the dashboard.");
+    }],
     ["Delete heading", () => removeHeading(heading)]
   ]));
   card.append(header);
@@ -288,10 +371,13 @@ function headingCard(heading) {
     card.append(done);
   }
 
+  if (heading.archived) return card;
+
   const add = element("form", "add");
   add.autocomplete = "off";
   const input = element("input");
   input.autocomplete = "off";
+  input.spellcheck = false;
   input.placeholder = "Add task…";
   input.setAttribute("aria-label", `Add task to ${heading.name}`);
   input.id = `add-${heading.id}`;
@@ -305,7 +391,7 @@ function headingCard(heading) {
     event.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    heading.tasks.push({ id: crypto.randomUUID(), text, added: new Date().toISOString(), completed: null });
+    heading.tasks.push(newTask(text));
     drafts.delete(heading.id);
     save(matches({ text }) ? "" : "Task added. Clear search to see it.");
     byId(input.id)?.focus();
@@ -315,7 +401,7 @@ function headingCard(heading) {
 }
 
 function allRecords() {
-  return headings.flatMap(heading => heading.tasks.map(task => ({ ...task, heading: heading.name, headingId: heading.id })));
+  return headings.flatMap(heading => heading.tasks.map(task => ({ ...task, heading: heading.name, headingId: heading.id, archived: Boolean(heading.archived) })));
 }
 
 function filteredRecords(records, includeStatus = true) {
@@ -323,7 +409,8 @@ function filteredRecords(records, includeStatus = true) {
   return records.filter(task =>
     (!headingFilter.value || task.headingId === headingFilter.value) &&
     matches(task) &&
-    (!includeStatus || !statusFilter.value || (task.completed ? "Completed" : "Pending") === statusFilter.value)
+    (!includeStatus || ((!statusFilter.value || taskStatus(task) === statusFilter.value) &&
+      (archiveFilter.value === "all" || task.archived === (archiveFilter.value === "archived"))))
   ).sort((a, b) => {
     if (!a[date]) return b[date] ? 1 : 0;
     if (!b[date]) return -1;
@@ -345,11 +432,20 @@ function recordsTable(records) {
   const body = table.createTBody();
   for (const task of records) {
     const row = body.insertRow();
-    const values = [
-      task.heading, task.text, task.completed ? "Completed" : "Pending",
-      localDate.format(new Date(task.added)), task.completed ? localDate.format(new Date(task.completed)) : ""
-    ];
-    for (const value of values) row.insertCell().textContent = value;
+    for (const column of recordFields) {
+      const value = column.value(task);
+      const cell = row.insertCell();
+      if (column.label === "Reference link" && webLink(value)) {
+        const link = element("a", "", value);
+        link.href = webLink(value);
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        cell.append(link);
+      } else {
+        cell.textContent = value && column.type === "timestamp" ? localDate.format(new Date(value)) :
+          column.type === "day" ? displayDay(value) : value ?? "";
+      }
+    }
   }
   if (!records.length) {
     const cell = body.insertRow().insertCell();
@@ -362,20 +458,23 @@ function recordsTable(records) {
 
 function render() {
   const isRecords = view === "records";
-  byId("title").textContent = isRecords ? "Task records" : "Work dashboard";
-  byId("subtitle").textContent = isRecords ? "Search, filter, and export your task history." : "Organise your work and check off tasks as you go.";
-  for (const id of ["dashboard", "records"]) {
+  [byId("title").textContent, byId("subtitle").textContent] = views[view];
+  for (const id of Object.keys(views)) {
     if (view === id) byId(id).setAttribute("aria-current", "page");
     else byId(id).removeAttribute("aria-current");
   }
-  statusFilter.hidden = sort.hidden = !isRecords;
+  statusFilter.hidden = sort.hidden = archiveFilter.hidden = !isRecords;
+  headingFilter.hidden = view === "weekly";
+  search.hidden = view === "weekly";
   const selected = headingFilter.value;
-  headingFilter.replaceChildren(new Option("All Headings", ""), ...headings.map(heading => new Option(heading.name, heading.id)));
-  headingFilter.value = headings.some(heading => heading.id === selected) ? selected : "";
+  const visibleHeadings = headings.filter(heading => isRecords || Boolean(heading.archived) === (view === "archived"));
+  headingFilter.replaceChildren(new Option("All Headings", ""), ...visibleHeadings.map(heading => new Option(heading.name, heading.id)));
+  headingFilter.value = visibleHeadings.some(heading => heading.id === selected) ? selected : "";
   const records = allRecords();
-  const done = records.filter(task => task.completed).length;
+  const active = records.filter(task => !task.archived);
   byId("totals").replaceChildren(...[
-    ["Headings", headings.length], ["Pending", records.length - done], ["Completed", done]
+    ["Active headings", headings.filter(heading => !heading.archived).length],
+    ...["Pending", "Waiting", "Completed"].map(status => [status, active.filter(task => taskStatus(task) === status).length])
   ].map(([label, value]) => {
     const stat = element("div", "stat");
     stat.append(element("strong", "", value), document.createTextNode(label));
@@ -384,10 +483,16 @@ function render() {
 
   if (isRecords) {
     content.replaceChildren(recordsTable(filteredRecords(records)));
-  } else if (headings.length) {
+  } else if (view === "today") {
+    content.replaceChildren(todayView());
+  } else if (view === "weekly") {
+    content.replaceChildren(weeklyView(records));
+  } else if (visibleHeadings.length) {
     const grid = element("div", "grid");
-    grid.append(...headings.filter(heading => !headingFilter.value || heading.id === headingFilter.value).map(headingCard));
+    grid.append(...visibleHeadings.filter(heading => !headingFilter.value || heading.id === headingFilter.value).map(headingCard));
     content.replaceChildren(grid);
+  } else if (view === "archived") {
+    content.replaceChildren(element("p", "empty", "No archived headings."));
   } else {
     const empty = element("div", "empty");
     empty.append(element("h2", "", "Create your first heading"),
@@ -397,8 +502,219 @@ function render() {
   }
 }
 
+function newTask(text) {
+  return {
+    id: crypto.randomUUID(), text, added: new Date().toISOString(), completed: null,
+    due: "", waiting: false, waitingFor: "", followUp: "", notes: "", link: ""
+  };
+}
+
+function duplicateHeading(heading) {
+  textDialog("Duplicate heading", "New heading name", `${heading.name.slice(0, 293)} (copy)`, "Duplicate heading", name => {
+    headings.push({
+      id: crypto.randomUUID(), name, archived: false,
+      tasks: heading.tasks.map(task => ({ ...newTask(task.text), notes: task.notes ?? "", link: task.link ?? "" }))
+    });
+    headingFilter.value = "";
+    search.value = "";
+    view = "dashboard";
+    save("Checklist duplicated.");
+  });
+}
+
+function editTask(task) {
+  const panel = element("div", "editor-fields");
+  function field(label, control, value, type, maxLength) {
+    const wrapper = element("label", "", label);
+    control.autocomplete = "off";
+    control.spellcheck = false;
+    if (type) control.type = type;
+    if (maxLength) control.maxLength = maxLength;
+    control.value = value ?? "";
+    wrapper.append(control);
+    panel.append(wrapper);
+    return control;
+  }
+
+  const title = field("Task name", element("input"), task.text, "text", 300);
+  title.required = true;
+  const statusSelect = element("select");
+  for (const status of ["Pending", "Waiting", "Completed"]) statusSelect.add(new Option(status));
+  field("Status", statusSelect, taskStatus(task));
+  const due = field("Due date", element("input"), task.due, "date");
+  const waitingFor = field("Waiting for", element("input"), task.waitingFor, "text", 300);
+  const followUp = field("Follow-up date", element("input"), task.followUp, "date");
+  const notes = field("Notes", element("textarea"), task.notes, undefined, 4000);
+  notes.rows = 3;
+  const link = field("Reference link", element("input"), task.link, "url", 2000);
+  function showWaitingFields() {
+    waitingFor.parentElement.hidden = followUp.parentElement.hidden = statusSelect.value !== "Waiting";
+  }
+  statusSelect.addEventListener("change", showWaitingFields);
+  showWaitingFields();
+  for (const input of [title, link]) input.addEventListener("input", () => input.setCustomValidity(""));
+
+  openDialog("Edit task", panel, "Save changes", () => {
+    const text = title.value.trim();
+    if (!text) {
+      title.setCustomValidity("Enter a task name.");
+      title.reportValidity();
+      return false;
+    }
+    const reference = link.value.trim();
+    if (reference && !webLink(reference)) {
+      link.setCustomValidity("Enter a link starting with https:// or http://.");
+      link.reportValidity();
+      return false;
+    }
+    Object.assign(task, {
+      text, due: due.value, waiting: statusSelect.value === "Waiting",
+      completed: statusSelect.value === "Completed" ? task.completed || new Date().toISOString() : null,
+      waitingFor: waitingFor.value.trim(), followUp: followUp.value, notes: notes.value, link: reference
+    });
+    save("Task updated.");
+  });
+}
+
+function todayGroups() {
+  const today = calendarDay();
+  const open = allRecords().filter(task => !task.archived && !task.completed && matches(task) &&
+    (!headingFilter.value || task.headingId === headingFilter.value));
+  return [
+    { title: "Overdue", tasks: open.filter(task => task.due && task.due < today).sort((a, b) => a.due.localeCompare(b.due)) },
+    { title: "Due today", tasks: open.filter(task => task.due === today) },
+    { title: "Follow-ups", tasks: open.filter(task => task.waiting && task.followUp && task.followUp <= today)
+      .sort((a, b) => a.followUp.localeCompare(b.followUp)) }
+  ];
+}
+
+function todayView() {
+  const grid = element("div", "grid");
+  for (const group of todayGroups()) {
+    const card = element("article", "card");
+    card.append(element("h2", "", group.title));
+    if (group.tasks.length) {
+      const list = element("ul");
+      for (const record of group.tasks) {
+        const heading = headings.find(item => item.id === record.headingId);
+        const task = heading.tasks.find(item => item.id === record.id);
+        list.append(taskRow(heading, task, heading.tasks, true));
+      }
+      card.append(list);
+    } else {
+      card.append(element("p", "small", "No tasks."));
+    }
+    grid.append(card);
+  }
+  return grid;
+}
+
+function weekRange(value) {
+  const start = dateFromDay(value);
+  start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return { start: calendarDay(start), end: calendarDay(end) };
+}
+
+function weeklyView(records) {
+  const week = weekRange(selectedWeek || calendarDay());
+  const completed = records.filter(task => {
+    if (!task.completed) return false;
+    const day = calendarDay(new Date(task.completed));
+    return day >= week.start && day <= week.end;
+  }).sort((a, b) => b.completed.localeCompare(a.completed));
+  const groups = [
+    { title: "Completed this week", tasks: completed },
+    { title: "Currently pending", tasks: records.filter(task => !task.archived && taskStatus(task) === "Pending") },
+    { title: "Currently waiting", tasks: records.filter(task => !task.archived && taskStatus(task) === "Waiting") }
+  ];
+  const panel = element("div");
+  const tools = element("div", "weekly-tools");
+  const pickerLabel = element("label", "", "Select a day in the week");
+  const picker = element("input");
+  picker.type = "date";
+  picker.value = selectedWeek || calendarDay();
+  picker.addEventListener("change", () => {
+    if (!validDay(picker.value)) return;
+    selectedWeek = picker.value;
+    render();
+    content.querySelector(".weekly-tools input")?.focus();
+  });
+  pickerLabel.append(picker);
+  const range = `${displayDay(week.start)} – ${displayDay(week.end)}`;
+  const grid = element("div", "grid");
+  const lines = [`Weekly work summary · ${range}`];
+  const exportRows = [];
+  for (const group of groups) {
+    const card = element("article", "card");
+    card.append(element("h2", "", `${group.title} (${group.tasks.length})`));
+    lines.push("", group.title);
+    if (!group.tasks.length) {
+      lines.push("None");
+      card.append(element("p", "small", "No tasks."));
+    }
+    const byHeading = new Map();
+    for (const task of group.tasks) {
+      if (!byHeading.has(task.headingId)) byHeading.set(task.headingId, []);
+      byHeading.get(task.headingId).push(task);
+    }
+    for (const tasks of byHeading.values()) {
+      const name = tasks[0].heading;
+      card.append(element("h3", "", name));
+      lines.push(name);
+      const list = element("ul", "weekly-list");
+      for (const task of tasks) {
+        const date = task.completed ? localDate.format(new Date(task.completed)) :
+          task.waiting && task.followUp ? `Follow-up ${displayDay(task.followUp)}` :
+          task.due ? `Due ${displayDay(task.due)}` : "";
+        const description = [task.text, task.waiting && task.waitingFor ? `Waiting for ${task.waitingFor}` : "", date].filter(Boolean).join(" · ");
+        list.append(element("li", "", description));
+        lines.push(`• ${description}`);
+        exportRows.push({ ...task, summaryGroup: group.title, weekStart: week.start, weekEnd: week.end });
+      }
+      card.append(list);
+    }
+    grid.append(card);
+  }
+  tools.append(pickerLabel, element("strong", "", range),
+    button("Copy summary", async () => {
+      const summary = lines.join("\n");
+      try {
+        await navigator.clipboard.writeText(summary);
+        notify("Weekly summary copied.");
+      } catch {
+        const text = element("textarea", "summary-copy");
+        text.readOnly = true;
+        text.value = summary;
+        text.rows = 12;
+        text.setAttribute("aria-label", "Weekly summary text");
+        openDialog("Copy weekly summary", text, "Done", () => {});
+        text.select();
+      }
+    }),
+    button("Export summary to Excel", async () => {
+      try {
+        const blob = await makeWorkbook(exportRows, "blob", true);
+        downloadFile(blob, `weekly-summary-${week.start}.xlsx`);
+        notify("Weekly summary downloaded.");
+      } catch {
+        notify("The weekly export failed. Try again.");
+      }
+    }));
+  panel.append(tools, grid);
+  return panel;
+}
+
+byId("undo").addEventListener("click", () => {
+  if (!undoDeletion) return;
+  undoDeletion();
+  undoDeletion = undefined;
+  save("Deletion undone.");
+});
+
 byId("new").addEventListener("click", newHeading);
-for (const id of ["dashboard", "records"]) {
+for (const id of Object.keys(views)) {
   byId(id).addEventListener("click", () => {
     view = id;
     render();
@@ -409,11 +725,12 @@ window.addEventListener("pageshow", () => {
   search.value = "";
   render();
 });
-for (const filter of [headingFilter, statusFilter, sort]) filter.addEventListener("change", render);
+for (const filter of [headingFilter, statusFilter, sort, archiveFilter]) filter.addEventListener("change", render);
 
 byId("export").addEventListener("click", () => {
   const records = allRecords();
-  const filtered = filteredRecords(records, view === "records");
+  const filtered = view === "today" ? todayGroups().flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
+    filteredRecords(records, view === "records").filter(task => view === "records" || view === "weekly" || task.archived === (view === "archived"));
   const options = element("div");
   for (const [value, title] of [["all", `All tasks (${records.length})`], ["filtered", `Current filters (${filtered.length})`]]) {
     const label = element("label", "radio");
@@ -439,7 +756,7 @@ byId("export").addEventListener("click", () => {
 byId("backup").addEventListener("click", () => {
   const panel = element("div");
   const download = button("Download backup", () => {
-    const data = JSON.stringify({ format: "fileflow-task-recorder", version: 1, headings }, null, 2);
+    const data = JSON.stringify({ format: "fileflow-task-recorder", version: 2, headings }, null, 2);
     downloadFile(new Blob([data], { type: "application/json" }), "task-recorder-backup.json");
   });
   const label = element("label", "", "Choose a Task Recorder backup");
@@ -462,11 +779,13 @@ byId("backup").addEventListener("click", () => {
       return false;
     }
     headings = restored;
+    undoDeletion = undefined;
     expanded.clear();
     drafts.clear();
     search.value = "";
     headingFilter.value = "";
     statusFilter.value = "";
+    archiveFilter.value = "active";
     view = "dashboard";
     storageIssue = "";
     save("Backup restored.");
@@ -482,10 +801,11 @@ document.addEventListener("click", event => {
 window.addEventListener("storage", event => {
   if (event.key !== storageKey && event.key !== null) return;
   try {
-    const updated = JSON.parse(event.newValue ?? "[]");
-    if (!Array.isArray(updated)) return;
-    headings = updated;
+    headings = normalizeHeadings(JSON.parse(event.newValue ?? "[]"));
+    undoDeletion = undefined;
+    if (dialog.open) dialog.close();
     render();
+    notify();
   } catch {
     notify("An update from another tab could not be loaded.");
   }

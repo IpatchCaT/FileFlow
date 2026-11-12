@@ -7,16 +7,16 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=4">
 <script defer src="jszip.min.js"></script>
-<script defer src="workbook.js"></script>
-<script defer src="app.js?v=3"></script>
+<script defer src="workbook.js?v=4"></script>
+<script defer src="app.js?v=4"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
 <a class="brand" href="./"><span class="mark" aria-hidden="true">✓</span>Task Recorder</a>
 <div class="toolbar">
-<input id="search" type="search" autocomplete="off" placeholder="Search tasks…" aria-label="Search tasks">
+<input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search tasks…" aria-label="Search tasks">
 <button id="export" class="outline">Export to Excel</button>
 <button id="backup" class="outline">Backup &amp; Restore</button>
 <button id="new" class="primary">＋ New Heading</button>
@@ -27,14 +27,15 @@
 <div class="totals" id="totals"></div>
 </section>
 <div class="viewbar">
-<nav aria-label="Workspace views"><button id="dashboard" aria-current="page">Dashboard</button><button id="records">Records</button></nav>
+<nav aria-label="Workspace views"><button id="dashboard" aria-current="page">Dashboard</button><button id="today">Today</button><button id="records">Records</button><button id="weekly">Weekly Summary</button><button id="archived">Archived</button></nav>
 <div class="filters">
 <select id="heading-filter" aria-label="Filter by heading"></select>
-<select id="status-filter" aria-label="Filter by status" hidden><option value="">All statuses</option><option>Pending</option><option>Completed</option></select>
+<select id="status-filter" aria-label="Filter by status" hidden><option value="">All statuses</option><option>Pending</option><option>Waiting</option><option>Completed</option></select>
+<select id="archive-filter" aria-label="Filter by archive status" hidden><option value="active">Active headings</option><option value="archived">Archived headings</option><option value="all">All headings</option></select>
 <select id="sort" aria-label="Sort records" hidden><option value="added-desc">Added · newest</option><option value="added-asc">Added · oldest</option><option value="completed-desc">Completed · newest</option><option value="completed-asc">Completed · oldest</option></select>
 </div>
 </div>
-<p id="notice" role="status"></p>
+<div class="feedback"><p id="notice" role="status"></p><button id="undo" hidden>Undo deletion</button></div>
 <section id="content" aria-label="Task workspace"></section>
 <p class="small privacy-note">Tasks are stored in this browser. Backups and Excel exports are saved as local downloads.</p>
 </main>
