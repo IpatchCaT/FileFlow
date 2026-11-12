@@ -1,1 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Canva Callout Resizer</title>
+<style>
+:root{--bg:#eef3f7;--card:#fff;--line:#cbd8e1;--text:#112c40;--muted:#5b7587;--accent:#123f5e;--canvas:#f4f7fa;--field:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1b24;--card:#17262f;--line:#2b4252;--text:#e3edf3;--muted:#8fa7b6;--accent:#2f7fb3;--canvas:#1d2f3a;--field:#0f1b24}}
+:root[data-theme="dark"]{--bg:#0f1b24;--card:#17262f;--line:#2b4252;--text:#e3edf3;--muted:#8fa7b6;--accent:#2f7fb3;--canvas:#1d2f3a;--field:#0f1b24}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1040px;margin:auto;padding:24px 16px}
+h1{margin:0 0 4px;font-size:1.5rem}
+.sub{margin:0 0 16px;color:var(--muted);line-height:1.5}
+.grid{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+aside,figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+aside{flex:1 1 270px}
+figure{flex:2 1 380px;min-width:0;position:sticky;top:8px}
+fieldset{border:0;padding:0;margin:0 0 12px}
+legend{font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 0 4px}
+label{display:flex;justify-content:space-between;align-items:center;margin:6px 0;gap:8px}
+input,select,textarea,button{font:inherit;color:inherit}
+input[type=number],select,textarea{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+input[type=number]{width:84px}
+input[type=color]{width:44px;height:30px;border:1px solid var(--line);border-radius:6px;background:var(--field);padding:2px}
+textarea{width:100%;resize:vertical;min-height:58px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:9px 13px;cursor:pointer}
+button.alt{background:transparent;color:var(--text);border:1px solid var(--line)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #257ac0;outline-offset:1px}
+svg{width:100%;height:360px;background:var(--canvas);border-radius:8px;touch-action:none;display:block}
+circle{cursor:grab}
+figcaption{margin-top:8px;color:var(--muted);font-size:.85rem;line-height:1.45}
+#info{margin-top:6px;font-size:.85rem;color:var(--muted);min-height:1.2em}
+</style>
+</head>
+<body>
+<main>
+<h1>Canva Callout Resizer</h1>
+<p class="sub">Shape a speech-bubble outline, download it as SVG or PNG, then place an editable text box over it in Canva.</p>
+<div class="grid">
+<aside id="panel">
+<fieldset><legend>Fit to text</legend>
+<textarea id="text" aria-label="Sample text" placeholder="Type your callout text…"></textarea>
+<label>Font <select id="font"><option>Arial</option><option>Georgia</option><option>Verdana</option><option>Courier New</option></select></label>
+<label>Font size <input id="fs" type="number" min="6" max="400" value="24"></label>
+<label>Padding <input id="pad" type="number" min="0" max="300" value="20"></label>
+<label>Show text in preview <input id="showtext" type="checkbox" checked></label>
+<div class="row"><button id="fit" class="alt" type="button">Fit box to text</button></div>
+</fieldset>
+<fieldset><legend>Box</legend>
+<label>Box width <input id="w" type="number" min="60" max="2000" value="202"></label>
+<label>Box height <input id="h" type="number" min="60" max="2000" value="156"></label>
+<label>Corner radius <input id="r" type="number" min="0" max="200" value="12"></label>
+</fieldset>
+<fieldset><legend>Pointer</legend>
+<label>Side <select id="side"><option>Left</option><option>Right</option><option>Top</option><option>Bottom</option></select></label>
+<label>Reach <input id="reach" type="number" min="8" max="1000" value="162"></label>
+<label>Slant <input id="slant" type="number" min="-1000" max="1000" value="119"></label>
+<label>Position (%) <input id="pos" type="number" min="0" max="100" value="19"></label>
+<label>Base width <input id="base" type="number" min="4" max="2000" value="38"></label>
+</fieldset>
+<fieldset><legend>Style</legend>
+<label>Fill <input id="fill" type="color" value="#ffffff"></label>
+<label>Outline <input id="stroke" type="color" value="#082739"></label>
+<label>Outline width <input id="sw" type="number" min="0" max="40" value="2"></label>
+</fieldset>
+<fieldset><legend>Export</legend>
+<label>PNG scale <select id="scale"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select></label>
+<div class="row">
+<button id="save" type="button">Download SVG</button>
+<button id="png" type="button">Download PNG</button>
+<button id="copy" class="alt" type="button">Copy SVG</button>
+<button id="reset" class="alt" type="button">Reset</button>
+</div>
+<div id="info" role="status"></div>
+</fieldset>
+</aside>
+<figure>
+<svg id="preview" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Callout outline preview">
+<path id="shape" stroke-linejoin="round"/>
+<g id="txtg" pointer-events="none"></g>
+<g id="handles" stroke="white" stroke-width="2">
+<circle id="anchor" r="7" fill="#097d80"><title>Drag the attachment to any edge</title></circle>
+<circle id="tip" r="7" fill="#257ac0"><title>Drag the pointer tip</title></circle>
+</g>
+</svg>
+<figcaption>Drag the teal dot to move the attachment around the box. Drag the blue dot to aim the pointer. Size is in SVG units (1 unit = 1 px at 1×).</figcaption>
+</figure>
+</div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const preview = $('preview'), shape = $('shape'), txtg = $('txtg');
+const SIDES = ['Top','Right','Bottom','Left'];
+const NUM = ['w','h','r','reach','slant','pos','base','fs','pad','sw'];
+const ALL = [...NUM,'side','fill','stroke','font','text','scale'];
+const DEFAULTS = {w:202,h:156,r:12,reach:162,slant:119,pos:19,base:38,side:'Left',fill:'#ffffff',stroke:'#082739',sw:2,fs:24,pad:20,font:'Arial',text:'',scale:'2'};
+const KEY = 'canva-callout-resizer-v2';
+let drag;
+
+function number(id) {
+  const f = $(id), v = f.valueAsNumber;
+  return Math.max(Number(f.min), Math.min(Number(f.max), Number.isFinite(v) ? v : Number(f.min)));
+}
+function setAll(o) { for (const k of ALL) if (k in o) $(k).value = o[k]; $('showtext').checked = o.showtext !== false; }
+function save() {
+  try { const o = {showtext: $('showtext').checked}; ALL.forEach(k => o[k] = $(k).value); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+}
+function rounded(nodes, radius) {
+  const n = nodes.length, f = v => +v.toFixed(2);
+  return nodes.map((nd, i) => {
+    const [vx, vy] = nd.p;
+    if (!nd.r || radius <= 0) return (i ? 'L ' : 'M ') + f(vx) + ' ' + f(vy);
+    const [px, py] = nodes[(i + n - 1) % n].p, [nx, ny] = nodes[(i + 1) % n].p;
+    const lp = Math.hypot(px - vx, py - vy) || 1, ln = Math.hypot(nx - vx, ny - vy) || 1;
+    const t = Math.min(radius, lp / 2, ln / 2);
+    const a = [vx + (px - vx) / lp * t, vy + (py - vy) / lp * t], b = [vx + (nx - vx) / ln * t, vy + (ny - vy) / ln * t];
+    return (i ? 'L ' : 'M ') + f(a[0]) + ' ' + f(a[1]) + ' Q ' + f(vx) + ' ' + f(vy) + ' ' + f(b[0]) + ' ' + f(b[1]);
+  }).join(' ') + ' Z';
+}
+function update() {
+  const w = number('w'), h = number('h'), sw = number('sw');
+  const side = SIDES.indexOf($('side').value);
+  const corners = [[0,0],[w,0],[w,h],[0,h]], dirs = [[1,0],[0,1],[-1,0],[0,-1]];
+  const [dx,dy] = dirs[side], [x,y] = corners[side];
+  const length = side % 2 ? h : w;
+  const half = Math.min(number('base') / 2, (length - 4) / 2);
+  const center = half + 2 + (length - 2 * half - 4) * number('pos') / 100;
+  const tip = center + number('slant') * (side > 1 ? -1 : 1);
+  const reach = number('reach');
+  const point = (along, out = 0) => [x + dx * along + dy * out, y + dy * along - dx * out];
+  const nodes = corners.flatMap((c, i) => i === side
+    ? [{p:c,r:1}, {p:point(center - half)}, {p:point(tip, reach)}, {p:point(center + half)}] : [{p:c,r:1}]);
+  const pts = nodes.map(n => n.p);
+  shape.setAttribute('d', rounded(nodes, number('r')));
+  shape.setAttribute('fill', $('fill').value);
+  shape.setAttribute('stroke', $('stroke').value);
+  shape.setAttribute('stroke-width', sw);
+  for (const [id, c] of [['anchor', point(center)], ['tip', point(tip, reach)]]) {
+    $(id).setAttribute('cx', c[0]); $(id).setAttribute('cy', c[1]);
+  }
+  // sample text
+  txtg.replaceChildren();
+  const lines = $('text').value.split('\n');
+  if ($('showtext').checked && $('text').value.trim()) {
+    const fs = number('fs'), lh = fs * 1.25, top = h / 2 - lines.length * lh / 2 + lh / 2;
+    lines.forEach((l, i) => {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', w / 2); t.setAttribute('y', top + i * lh);
+      t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'central');
+      t.setAttribute('font-family', $('font').value); t.setAttribute('font-size', fs);
+      t.setAttribute('fill', '#112c40'); t.textContent = l; txtg.appendChild(t);
+    });
+  }
+  const pad = sw / 2 + 2;
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const minX = Math.min(...xs) - pad, minY = Math.min(...ys) - pad;
+  const width = Math.max(...xs) - Math.min(...xs) + 2 * pad, height = Math.max(...ys) - Math.min(...ys) + 2 * pad;
+  const viewBox = [minX, minY, width, height];
+  if (!drag) {
+    const m = Math.max(75, Math.min(220, Math.max(width, height) / 3));
+    preview.setAttribute('viewBox', [minX - m, minY - m, width + 2 * m, height + 2 * m].join(' '));
+  }
+  $('info').textContent = 'Outline size: ' + Math.round(width) + ' × ' + Math.round(height) + ' px';
+  return {width, height, viewBox};
+}
+function fitToText() {
+  const lines = $('text').value.split('\n'), fs = number('fs'), pad = number('pad');
+  if (!$('text').value.trim()) { $('info').textContent = 'Type some text first.'; return; }
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = fs + 'px ' + $('font').value;
+  const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+  $('w').value = Math.round(Math.max(60, tw + 2 * pad));
+  $('h').value = Math.round(Math.max(60, lines.length * fs * 1.25 + 2 * pad));
+  update(); save();
+}
+function makeSVG() {
+  const {width, height, viewBox} = update();
+  const svg = preview.cloneNode(true);
+  svg.removeAttribute('id');
+  svg.querySelector('#handles').remove();
+  svg.querySelector('#txtg').remove();
+  svg.querySelector('#shape').removeAttribute('id');
+  svg.setAttribute('viewBox', viewBox.join(' '));
+  svg.setAttribute('width', width); svg.setAttribute('height', height);
+  return {text: new XMLSerializer().serializeToString(svg), width, height};
+}
+function download(blob, name) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function note(msg) { $('info').textContent = msg; }
+
+$('panel').addEventListener('input', () => { update(); save(); });
+$('fit').onclick = fitToText;
+$('reset').onclick = () => { setAll(DEFAULTS); update(); save(); };
+$('save').onclick = () => download(new Blob([makeSVG().text], {type: 'image/svg+xml'}), 'Canva_Callout.svg');
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(makeSVG().text); note('SVG code copied.'); }
+  catch (e) { note('Copy is blocked here; use Download SVG instead.'); }
+};
+$('png').onclick = () => {
+  const {text, width, height} = makeSVG(), s = Number($('scale').value);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(width * s); c.height = Math.round(height * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(b => b ? download(b, 'Canva_Callout.png') : note('PNG export failed.'), 'image/png');
+  };
+  img.onerror = () => note('PNG export failed; try SVG.');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text);
+};
+
+$('handles').addEventListener('pointerdown', e => {
+  drag = e.target.closest('circle')?.id;
+  if (drag) preview.setPointerCapture(e.pointerId);
+});
+preview.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const {x, y} = new DOMPoint(e.clientX, e.clientY).matrixTransform(preview.getScreenCTM().inverse());
+  const w = number('w'), h = number('h');
+  const outward = [-y, x - w, y - h, -x], along = [x, y, w - x, h - y];
+  let side = SIDES.indexOf($('side').value);
+  if (drag === 'anchor') {
+    const dist = outward.map(Math.abs);
+    side = dist.indexOf(Math.min(...dist));
+    $('side').value = SIDES[side];
+    const length = side % 2 ? h : w;
+    const inset = Math.min(number('base') / 2 + 2, length / 2), travel = length - 2 * inset;
+    $('pos').value = travel ? Math.round(Math.max(0, Math.min(100, 100 * (along[side] - inset) / travel))) : 50;
+  } else {
+    if (outward[side] < 8 && Math.max(...outward) >= 8) {
+      side = outward.indexOf(Math.max(...outward));
+      $('side').value = SIDES[side];
+    }
+    const length = side % 2 ? h : w;
+    const inset = Math.min(number('base') / 2 + 2, length / 2);
+    const center = inset + (length - 2 * inset) * number('pos') / 100;
+    $('reach').value = Math.round(Math.max(8, outward[side]));
+    $('slant').value = Math.round((along[side] - center) * (side > 1 ? -1 : 1));
+  }
+  update();
+});
+preview.addEventListener('lostpointercapture', () => { drag = undefined; update(); save(); });
+
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+setAll({...DEFAULTS, ...saved});
+update();
+</script>
+</body>
+</html>
 
