@@ -1,1 +1,72 @@
-
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Create, edit and reuse professional emails.">
+<title>Email-Gen</title>
+<link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/templates.js"></script>
+<script defer src="assets/app.js"></script>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <a class="brand" href="#compose"><img src="assets/mark.svg" alt="">Email<span>-Gen</span></a>
+  <nav aria-label="Workspace">
+    <a href="#compose" data-page="compose"><span aria-hidden="true">✎</span> Generate Email</a>
+    <a href="#drafts" data-page="drafts"><span aria-hidden="true">▤</span> Drafts <span class="count" id="draft-count"></span></a>
+    <a href="#templates" data-page="templates"><span aria-hidden="true">▦</span> Templates</a>
+  </nav>
+  <div class="sidebar-foot"><i></i> Browser workspace</div>
+</aside>
+<main>
+  <section id="compose">
+    <header class="page-head"><div><h1>Generate Email</h1><p>Choose a template, fill in the details, and edit your draft.</p></div><button type="button" class="outline" id="new-draft">+ New draft</button></header>
+    <div class="workbench">
+      <form id="compose-form" class="card input-card">
+        <h2>Email details</h2>
+        <label>Template<select id="template-select"></select></label>
+        <label>Recipient name <small>Optional</small><input id="recipient" placeholder="e.g. Farah" maxlength="150"></label>
+        <div id="dynamic-fields"></div>
+        <label>Sender signature <small>Optional</small><textarea id="signature" rows="2" placeholder="Your name or email signature" maxlength="500"></textarea></label>
+        <button type="submit" class="primary generate"><span aria-hidden="true">✧</span> Generate draft</button>
+      </form>
+      <section class="card editor" aria-labelledby="editor-title">
+        <div class="editor-top"><div class="mail-icon" aria-hidden="true">✉</div><div><h2 id="editor-title">Draft editor</h2><span id="editor-state">New draft</span></div></div>
+        <div class="paper">
+          <div class="subject-row"><label for="subject">Subject</label><input id="subject" placeholder="Your email subject" maxlength="300"><button type="button" class="text-button" id="copy-subject">Copy</button></div>
+          <label class="sr-only" for="message">Message</label>
+          <textarea id="message" placeholder="Your draft will appear here. You can also write directly in the editor." maxlength="20000"></textarea>
+        </div>
+        <footer class="editor-foot"><span id="word-count">0 words</span><div><button type="button" class="outline" id="copy-email">Copy email</button> <button type="button" class="dark" id="save-draft">Save draft</button></div></footer>
+      </section>
+    </div>
+  </section>
+  <section id="drafts" hidden>
+    <header class="page-head"><div><h1>Drafts</h1><p>Open a saved email or duplicate it for another recipient.</p></div><a class="outline" href="#compose" id="drafts-new">+ New draft</a></header>
+    <label class="search">Search drafts<input id="draft-search" type="search" placeholder="Subject, recipient, or email type"></label>
+    <div id="draft-list" class="records"></div>
+  </section>
+  <section id="templates" hidden>
+    <header class="page-head"><div><h1>Templates</h1><p>Choose a starting point or adapt one to your workflow.</p></div></header>
+    <div id="template-list" class="records templates"></div>
+  </section>
+</main>
+</div>
+<dialog id="template-dialog">
+  <form id="template-form">
+    <header class="dialog-head"><h2 id="dialog-title">Edit template</h2><button class="text-button" id="close-dialog" type="button" aria-label="Close">✕</button></header>
+    <label>Template name<input id="template-name" required maxlength="100"></label>
+    <label>Subject pattern<input id="pattern-subject" required maxlength="300"></label>
+    <label>Message pattern<textarea id="pattern-body" required rows="9" maxlength="12000"></textarea></label>
+    <div id="placeholders"></div>
+    <p class="hint">A line containing an empty optional placeholder is omitted. Insert placeholders wherever you want form values to appear.</p>
+    <p id="template-error" class="error" role="alert"></p>
+    <footer class="dialog-actions"><button class="primary" type="submit">Save template</button></footer>
+  </form>
+</dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
