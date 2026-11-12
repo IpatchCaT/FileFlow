@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js?v=4"></script>
 <script defer src="app.js?v=15"></script>
@@ -20,6 +20,8 @@
 <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search tasks…" aria-label="Search tasks" aria-keyshortcuts="/">
 <kbd aria-hidden="true">/</kbd>
 </div>
+<button id="new" class="outline create-button" type="button"><span aria-hidden="true">+</span>New heading</button>
+<button id="new-task" class="primary create-button" type="button"><span aria-hidden="true">+</span>New task</button>
 <button id="help" class="outline" type="button">Help</button>
 </div>
 <div class="storage-controls" aria-label="Task Recorder storage">
@@ -28,10 +30,6 @@
 </div></div></header>
 <main class="workspace-layout">
 <aside class="workspace-sidebar" aria-label="Heading shortcuts">
-<div class="create-actions" role="group" aria-label="Create work">
-<button id="new-task" class="primary create-button" type="button"><span aria-hidden="true">+</span>New task</button>
-<button id="new" class="create-button" type="button"><span aria-hidden="true">+</span>New heading</button>
-</div>
 <section class="heading-index" aria-labelledby="heading-index-title">
 <h2 id="heading-index-title">Headings</h2>
 <label class="heading-sort">Sort headings

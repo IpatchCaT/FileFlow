@@ -250,17 +250,10 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .help-controls dt { font-weight: 650; }
 .help-controls dd { margin: 0 0 .65rem; color: var(--muted); }
 
-.create-actions {
-  grid-area: create;
-  display: grid;
-  gap: .55rem;
-  align-self: start;
-}
 .workspace-layout {
   grid-template-columns: 9.5rem minmax(0, 1fr) 11rem;
   grid-template-areas: "create workspace actions";
 }
-.create-actions { margin-top: 2.7rem; }
 .create-button {
   display: flex;
   align-items: center;
@@ -288,12 +281,11 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .create-button:active { box-shadow: inset 0 1px 3px #203a2c35; }
 @media (max-width: 940px) {
   .workspace-layout { grid-template-columns: minmax(0, 1fr) 11rem; grid-template-areas: "create actions" "workspace actions"; row-gap: 0; }
-  .create-actions { display: flex; flex-wrap: wrap; margin-top: 1rem; }
 }
 @media (max-width: 760px) {
   .workspace-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "create" "actions" "workspace"; }
-  .toolbar { display: flex; }
-  .toolbar .search-control { flex: 1; }
+  .toolbar { display: flex; justify-content: flex-start; }
+  .toolbar .search-control { flex: 1 0 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .create-button { transition: none; }
@@ -347,7 +339,6 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   margin-top: 2.7rem;
   min-width: 0;
 }
-.workspace-sidebar .create-actions { margin-top: 0; }
 .heading-index {
   min-width: 0;
   background: #fff;
@@ -360,7 +351,7 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .heading-sort select { width: 100%; padding: .35rem .45rem; }
 .heading-shortcuts {
   display: grid;
-  gap: .25rem;
+  gap: .4rem;
   max-height: 23rem;
   overflow: auto;
   margin: .5rem 0 0;
@@ -372,10 +363,11 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   width: 100%;
   text-align: start;
   font-size: .85rem;
-  padding: .45rem .4rem;
-  border-color: transparent;
+  padding: .55rem .5rem;
+  background: #f0f5ee;
+  border-color: #d6e3d3;
 }
-.heading-shortcut-name { overflow-wrap: anywhere; }
+.heading-shortcut-name { overflow-wrap: anywhere; color: #173b29; font-weight: 750; }
 .heading-shortcut small { color: var(--muted); }
 .heading-shortcut[aria-current] { background: #e6f0e2; border-color: #a9c5a7; font-weight: 700; }
 @media (max-width: 940px) {
