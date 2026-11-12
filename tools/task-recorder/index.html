@@ -1,1 +1,46 @@
 
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#172c24">
+<title>Task Recorder</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="jszip.min.js"></script>
+<script defer src="workbook.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body>
+<header class="top"><div class="top-inner">
+<a class="brand" href="./"><span class="mark" aria-hidden="true">✓</span>Task Recorder</a>
+<div class="toolbar">
+<input id="search" type="search" placeholder="Search tasks…" aria-label="Search tasks">
+<button id="export" class="outline">Export to Excel</button>
+<button id="new" class="primary">＋ New Heading</button>
+</div></div></header>
+<main>
+<section class="intro">
+<div><h1 id="title">Work dashboard</h1><p id="subtitle">Organise your work and check off tasks as you go.</p></div>
+<div class="totals" id="totals"></div>
+</section>
+<div class="viewbar">
+<nav aria-label="Workspace views"><button id="dashboard" aria-current="page">Dashboard</button><button id="records">Records</button></nav>
+<div class="filters">
+<select id="heading-filter" aria-label="Filter by heading"></select>
+<select id="status-filter" aria-label="Filter by status" hidden><option value="">All statuses</option><option>Pending</option><option>Completed</option></select>
+<select id="sort" aria-label="Sort records" hidden><option value="added-desc">Added · newest</option><option value="added-asc">Added · oldest</option><option value="completed-desc">Completed · newest</option><option value="completed-asc">Completed · oldest</option></select>
+</div>
+</div>
+<p id="notice" role="status"></p>
+<section id="content" aria-label="Task workspace"></section>
+</main>
+<dialog id="dialog" aria-labelledby="dialog-title">
+<form id="dialog-form">
+<h2 id="dialog-title"></h2>
+<div id="dialog-body"></div>
+<div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button class="primary" id="confirm" type="submit">Save</button></div>
+</form>
+</dialog>
+</body>
+</html>
