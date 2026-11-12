@@ -5,18 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#172c24">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js"></script>
-<script defer src="app.js"></script>
+<script defer src="app.js?v=2"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
 <a class="brand" href="./"><span class="mark" aria-hidden="true">✓</span>Task Recorder</a>
 <div class="toolbar">
-<input id="search" type="search" placeholder="Search tasks…" aria-label="Search tasks">
+<input id="search" type="search" autocomplete="off" placeholder="Search tasks…" aria-label="Search tasks">
 <button id="export" class="outline">Export to Excel</button>
+<button id="backup" class="outline">Backup &amp; Restore</button>
 <button id="new" class="primary">＋ New Heading</button>
 </div></div></header>
 <main>
@@ -34,6 +36,7 @@
 </div>
 <p id="notice" role="status"></p>
 <section id="content" aria-label="Task workspace"></section>
+<p class="small privacy-note">Tasks are stored in this browser. Backups and Excel exports are saved as local downloads.</p>
 </main>
 <dialog id="dialog" aria-labelledby="dialog-title">
 <form id="dialog-form">

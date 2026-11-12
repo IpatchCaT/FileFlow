@@ -31,6 +31,45 @@ function notify(message = "") {
   byId("notice").textContent = [storageIssue, message].filter(Boolean).join(" ");
 }
 
+function downloadFile(blob, filename) {
+  const link = element("a");
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function parseBackup(text) {
+  const backup = JSON.parse(text);
+  if (backup?.format !== "fileflow-task-recorder" || backup.version !== 1 ||
+      !Array.isArray(backup.headings)) throw new Error("Invalid backup format");
+
+  const ids = new Set();
+  function validId(id) {
+    if (typeof id !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(id) || ids.has(id)) return false;
+    ids.add(id);
+    return true;
+  }
+  const validText = value => typeof value === "string" && value.trim() && value.length <= 300;
+  const validDate = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+
+  return backup.headings.map(heading => {
+    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks)) {
+      throw new Error("Invalid heading");
+    }
+    const tasks = heading.tasks.map(task => {
+      if (!task || !validId(task.id) || !validText(task.text) || !validDate(task.added) ||
+          (task.completed !== null && !validDate(task.completed))) throw new Error("Invalid task");
+      return { id: task.id, text: task.text, added: task.added, completed: task.completed };
+    });
+    return { id: heading.id, name: heading.name, tasks };
+  });
+}
+
 function save(message = "") {
   if (!storageIssue.startsWith("Saved records")) {
     try {
@@ -225,6 +264,14 @@ function headingCard(heading) {
     ["Delete heading", () => removeHeading(heading)]
   ]));
   card.append(header);
+  if (heading.tasks.length) {
+    const progress = element("progress", "heading-progress");
+    progress.max = heading.tasks.length;
+    progress.value = completed.length;
+    const label = element("label", "progress-label", `${completed.length} of ${heading.tasks.length} completed`);
+    label.append(progress);
+    card.append(label);
+  }
   const pendingList = taskList(heading, pending);
   card.append(pendingList.children.length ? pendingList : element("p", "small", pending.length ? "No matching pending tasks." : "No pending tasks."));
   const visibleDone = completed.filter(matches);
@@ -356,6 +403,10 @@ for (const id of ["dashboard", "records"]) {
   });
 }
 search.addEventListener("input", render);
+window.addEventListener("pageshow", () => {
+  search.value = "";
+  render();
+});
 for (const filter of [headingFilter, statusFilter, sort]) filter.addEventListener("change", render);
 
 byId("export").addEventListener("click", () => {
@@ -375,18 +426,48 @@ byId("export").addEventListener("click", () => {
   openDialog("Export to Excel", options, "Download .xlsx", async data => {
     try {
       const blob = await makeWorkbook(data.get("scope") === "all" ? records : filtered);
-      const link = element("a");
-      const url = URL.createObjectURL(blob);
-      link.href = url;
-      link.download = "task-records.xlsx";
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadFile(blob, "task-records.xlsx");
       notify("Excel workbook downloaded.");
     } catch {
       notify("The Excel export failed. Try again.");
     }
+  });
+});
+
+byId("backup").addEventListener("click", () => {
+  const panel = element("div");
+  const download = button("Download backup", () => {
+    const data = JSON.stringify({ format: "fileflow-task-recorder", version: 1, headings }, null, 2);
+    downloadFile(new Blob([data], { type: "application/json" }), "task-recorder-backup.json");
+  });
+  const label = element("label", "", "Choose a Task Recorder backup");
+  const input = element("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+  input.required = true;
+  label.append(input);
+  const error = element("p", "small");
+  error.setAttribute("role", "alert");
+  panel.append(download, label, element("p", "small", "Restoring replaces all current tasks and headings in this browser."), error);
+
+  input.addEventListener("change", () => { error.textContent = ""; });
+  openDialog("Backup & Restore", panel, "Replace with backup", async () => {
+    let restored;
+    try {
+      restored = parseBackup(await input.files[0].text());
+    } catch {
+      error.textContent = "Choose a valid Task Recorder JSON backup. Your current tasks are still available.";
+      return false;
+    }
+    headings = restored;
+    expanded.clear();
+    drafts.clear();
+    search.value = "";
+    headingFilter.value = "";
+    statusFilter.value = "";
+    view = "dashboard";
+    storageIssue = "";
+    save("Backup restored.");
   });
 });
 
@@ -408,5 +489,6 @@ window.addEventListener("storage", event => {
   }
 });
 
+search.value = "";
 render();
 notify();
