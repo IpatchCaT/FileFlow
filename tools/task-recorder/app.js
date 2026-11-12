@@ -789,7 +789,6 @@ window.addEventListener("pageshow", () => {
 for (const filter of [headingFilter, statusFilter, sort, archiveFilter]) filter.addEventListener("change", render);
 
 byId("export").addEventListener("click", () => {
-  byId("export").closest("details").open = false;
   const records = allRecords();
   const filtered = view === "today" ? todayGroups().flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
     filteredRecords(records, view === "records").filter(task => view === "records" || view === "weekly" || task.archived === (view === "archived"));
@@ -816,7 +815,6 @@ byId("export").addEventListener("click", () => {
 });
 
 byId("backup").addEventListener("click", () => {
-  byId("backup").closest("details").open = false;
   const panel = element("div");
   const download = button("Download backup", () => {
     const data = JSON.stringify({ format: "fileflow-task-recorder", version: 2, headings }, null, 2);

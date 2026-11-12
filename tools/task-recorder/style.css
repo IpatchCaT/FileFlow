@@ -98,13 +98,10 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 /* Workspace controls */
 .top-inner { gap: .8rem 1.4rem; }
 .toolbar { justify-content: flex-end; }
-.toolbar > button, .data-menu > summary { min-height: 42px; }
+.toolbar > button { min-height: 42px; }
 .search-control { display: flex; position: relative; align-items: center; }
 .search-control input { width: clamp(10rem, 19vw, 17rem); padding-right: 2rem; }
 .search-control kbd { position: absolute; right: .55rem; pointer-events: none; color: #d1ded5; border: 1px solid #617a6b; border-radius: 4px; padding: 0 .28rem; }
-.data-menu > summary { display: flex; align-items: center; gap: .45rem; padding: .55rem .8rem; border: 1px solid #617a6b; font-weight: 600; }
-.data-menu > summary:hover, .data-menu[open] > summary { background: #324d40; }
-.data-menu .menu-actions { color: #1d3027; z-index: 5; }
 .stat { min-width: 86px; text-align: left; }
 .stat:hover { background: #e0ebd9; border-color: #9fbba2; }
 .task-controls { display: flex; align-items: center; flex: 0 0 auto; gap: .15rem; }
@@ -113,9 +110,36 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .clear-filters { color: var(--green); font-weight: 650; }
 .editor-fields:has(label:first-child select) label:nth-child(2) { grid-column: 1 / -1; }
 @media (max-width: 630px) {
-  .toolbar { display: grid; grid-template-columns: auto 1fr 1fr; }
+  .toolbar { display: grid; grid-template-columns: 1fr 1fr; }
   .search-control { grid-column: 1 / -1; }
   .search-control input { width: 100%; }
-  .data-menu .menu-actions { right: auto; left: 0; }
   .toolbar > button { padding-inline: .4rem; }
+}
+
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 11rem;
+  grid-template-areas: "workspace actions";
+  gap: 1.25rem;
+  align-items: start;
+}
+.workspace-main { grid-area: workspace; min-width: 0; }
+.workspace-actions {
+  grid-area: actions;
+  position: sticky;
+  top: 1rem;
+  margin-top: 2.7rem;
+  display: grid;
+  gap: .5rem;
+  padding: .6rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #eef1e6;
+}
+.workspace-actions button { min-height: 42px; font-size: .85rem; font-weight: 650; }
+@media (max-width: 760px) {
+  .workspace-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "actions" "workspace"; gap: 0; }
+  .workspace-actions { position: static; margin-top: .8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-main .intro { padding-top: 1.5rem; }
 }
