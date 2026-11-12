@@ -13,9 +13,9 @@ const dialogBody = byId("dialog-body");
 const form = byId("dialog-form");
 const expanded = new Set();
 const drafts = new Map();
-const headingNoteDrafts = new Map();
-const openHeadingNotes = new Set();
-const headingNoteLimit = 4000;
+const noteDrafts = new Map();
+const openNotePanels = new Set();
+const noteLimit = 4000;
 const accents = ["#6c9c77", "#c5955b", "#8191b6", "#a581a0"];
 
 let headings = [];
@@ -111,7 +111,7 @@ function normalizeHeadings(data) {
   const optionalFlag = value => value === undefined || typeof value === "boolean";
   return data.map(heading => {
     if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks) || !optionalFlag(heading.archived) ||
-        !optionalText(heading.notes, headingNoteLimit)) {
+        !optionalText(heading.notes, noteLimit)) {
       throw new Error("Invalid heading");
     }
     const tasks = heading.tasks.map(task => {
@@ -161,6 +161,7 @@ function openDialog(title, field, confirmText, action) {
   byId("dialog-title").textContent = title;
   dialogBody.replaceChildren(field);
   byId("confirm").textContent = confirmText;
+  byId("confirm").classList.remove("destructive");
   submitDialog = action;
   dialog.showModal();
   dialogBody.querySelector("input, select, textarea")?.focus();
@@ -245,8 +246,10 @@ function removeHeading(heading) {
     undoDeletion = () => headings.splice(index, 0, heading);
     expanded.delete(heading.id);
     drafts.delete(heading.id);
-    headingNoteDrafts.delete(heading.id);
-    openHeadingNotes.delete(heading.id);
+    for (const key of [`Heading-${heading.id}`, `Quick-${heading.id}`, ...heading.tasks.map(task => `Task-${task.id}`)]) {
+      noteDrafts.delete(key);
+      openNotePanels.delete(key);
+    }
     save("Heading deleted.");
   };
   if (!heading.tasks.length) return remove();
@@ -313,6 +316,8 @@ function taskRow(heading, task, siblings, showHeading = false) {
       const index = heading.tasks.indexOf(task);
       if (index < 0) return;
       heading.tasks.splice(index, 1);
+      noteDrafts.delete(`Task-${task.id}`);
+      openNotePanels.delete(`Task-${task.id}`);
       undoDeletion = () => heading.tasks.splice(index, 0, task);
       save("Task deleted.");
     }]
@@ -325,7 +330,10 @@ function taskRow(heading, task, siblings, showHeading = false) {
   const edit = button("Edit", () => editTask(task), "task-edit");
   edit.setAttribute("aria-label", `Edit task: ${task.text}`);
   controls.append(edit, menu(`Actions for ${task.text}`, actions));
-  row.append(label, controls);
+  const line = element("div", "task-line");
+  line.append(label, controls);
+  row.append(line);
+  row.append(notesPanel(task, "Task", task.text));
   return row;
 }
 
@@ -335,42 +343,43 @@ function taskList(heading, siblings) {
   return list;
 }
 
-function headingNotesPanel(heading) {
+function notesPanel(record, kind, name) {
+  const key = `${kind}-${record.id}`;
   const panel = element("details", "heading-notes");
   const summary = element("summary", "heading-notes-summary");
-  summary.append(element("span", "", "Heading notes"));
-  if (heading.notes?.trim()) {
-    summary.append(element("span", "heading-note-preview", heading.notes.trim().replace(/\s+/g, " ")));
+  summary.append(element("span", "", `${kind} notes`));
+  if (record.notes?.trim()) {
+    summary.append(element("span", "heading-note-preview", record.notes.trim().replace(/\s+/g, " ")));
   }
-  panel.open = openHeadingNotes.has(heading.id);
+  panel.open = openNotePanels.has(key);
   panel.addEventListener("toggle", () => {
     if (!panel.isConnected) return;
-    if (panel.open) openHeadingNotes.add(heading.id);
-    else openHeadingNotes.delete(heading.id);
+    if (panel.open) openNotePanels.add(key);
+    else openNotePanels.delete(key);
   });
 
   const input = element("textarea", "heading-note-input");
-  input.id = `heading-notes-${heading.id}`;
-  input.setAttribute("aria-label", `Heading notes for ${heading.name}`);
+  input.id = `notes-${key}`;
+  input.setAttribute("aria-label", `${kind} notes for ${name}`);
   input.autocomplete = "off";
   input.spellcheck = false;
   input.rows = 4;
-  input.maxLength = headingNoteLimit;
-  input.placeholder = "Add project notes, decisions, or reminders…";
-  const saved = heading.notes ?? "";
-  input.value = headingNoteDrafts.get(heading.id) ?? saved;
+  input.maxLength = noteLimit;
+  input.placeholder = `Add notes about this ${kind.toLowerCase()}…`;
+  const saved = record.notes ?? "";
+  input.value = noteDrafts.get(key) ?? saved;
   const saveNote = button("Save notes", () => {
-    heading.notes = input.value;
-    headingNoteDrafts.delete(heading.id);
-    openHeadingNotes.add(heading.id);
-    save("Heading notes saved.");
+    record.notes = input.value;
+    noteDrafts.delete(key);
+    openNotePanels.add(key);
+    save(`${kind} notes saved.`);
     byId(input.id)?.focus();
   });
   saveNote.disabled = input.value === saved;
   input.addEventListener("input", () => {
     saveNote.disabled = input.value === saved;
-    if (saveNote.disabled) headingNoteDrafts.delete(heading.id);
-    else headingNoteDrafts.set(heading.id, input.value);
+    if (saveNote.disabled) noteDrafts.delete(key);
+    else noteDrafts.set(key, input.value);
   });
   panel.append(summary, input, saveNote);
   return panel;
@@ -397,7 +406,7 @@ function headingCard(heading) {
     }],
     ["Delete heading", () => removeHeading(heading)]
   ]));
-  card.append(header, headingNotesPanel(heading));
+  card.append(header, notesPanel(heading, "Heading", heading.name));
   if (heading.tasks.length) {
     const progress = element("progress", "heading-progress");
     progress.max = heading.tasks.length;
@@ -437,14 +446,36 @@ function headingCard(heading) {
   input.value = drafts.get(heading.id) ?? "";
   input.addEventListener("input", () => drafts.set(heading.id, input.value));
   const submit = element("button", "", "Add");
-  add.append(input, submit);
+  const noteKey = `Quick-${heading.id}`;
+  const quickNotes = element("details", "heading-notes quick-notes");
+  quickNotes.open = openNotePanels.has(noteKey);
+  const quickInput = element("textarea", "heading-note-input");
+  quickInput.setAttribute("aria-label", `Notes for new task in ${heading.name}`);
+  quickInput.autocomplete = "off";
+  quickInput.spellcheck = false;
+  quickInput.rows = 3;
+  quickInput.maxLength = noteLimit;
+  quickInput.placeholder = "Add notes for this new task…";
+  quickInput.value = noteDrafts.get(noteKey) ?? "";
+  quickInput.addEventListener("input", () => noteDrafts.set(noteKey, quickInput.value));
+  quickNotes.addEventListener("toggle", () => {
+    if (!quickNotes.isConnected) return;
+    if (quickNotes.open) openNotePanels.add(noteKey);
+    else openNotePanels.delete(noteKey);
+  });
+  quickNotes.append(element("summary", "heading-notes-summary", "Add task notes (optional)"), quickInput);
+  add.append(input, submit, quickNotes);
   add.addEventListener("submit", event => {
     event.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    heading.tasks.push(newTask(text));
+    const task = newTask(text);
+    task.notes = quickInput.value;
+    heading.tasks.push(task);
     drafts.delete(heading.id);
-    save(matches({ text }) ? "" : "Task added. Clear search to see it.");
+    noteDrafts.delete(noteKey);
+    openNotePanels.delete(noteKey);
+    save(matches(task) ? "" : "Task added. Clear search to see it.");
     byId(input.id)?.focus();
   });
   card.append(add);
@@ -507,7 +538,20 @@ function recordsTable(records) {
   return wrap;
 }
 
+function renderStorageUsage() {
+  const indicator = byId("storage-used");
+  try {
+    const saved = localStorage.getItem(storageKey);
+    const bytes = saved === null ? 0 : new Blob([saved]).size;
+    const size = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+    indicator.textContent = `Storage used · ${size}`;
+  } catch {
+    indicator.textContent = "Storage used · Unavailable";
+  }
+}
+
 function render() {
+  renderStorageUsage();
   const isRecords = view === "records";
   [byId("title").textContent, byId("subtitle").textContent] = views[view];
   for (const id of Object.keys(views)) {
@@ -643,6 +687,7 @@ function editTask(task, creating = false) {
     }
     const heading = creating ? headings.find(item => item.id === destination.value && !item.archived) : null;
     if (creating && !heading) return false;
+    noteDrafts.delete(`Task-${task.id}`);
     Object.assign(task, {
       text, due: due.value, waiting: statusSelect.value === "Waiting",
       completed: statusSelect.value === "Completed" ? task.completed || new Date().toISOString() : null,
@@ -862,12 +907,56 @@ byId("export").addEventListener("click", () => {
   });
 });
 
+function downloadBackup() {
+  const data = JSON.stringify({ format: "fileflow-task-recorder", version: 2, headings }, null, 2);
+  downloadFile(new Blob([data], { type: "application/json" }), "task-recorder-backup.json");
+}
+
+function resetWorkspace() {
+  undoDeletion = undefined;
+  expanded.clear();
+  drafts.clear();
+  noteDrafts.clear();
+  openNotePanels.clear();
+  search.value = "";
+  headingFilter.value = "";
+  statusFilter.value = "";
+  sort.value = "added-desc";
+  archiveFilter.value = "active";
+  selectedWeek = "";
+  todaySection = "";
+  view = "dashboard";
+  storageIssue = "";
+}
+
+byId("clear-data").addEventListener("click", () => {
+  const panel = element("div");
+  const error = element("p", "small");
+  error.setAttribute("role", "alert");
+  panel.append(
+    element("p", "", "Delete all headings, tasks, and notes saved in this browser, including archived headings? Download a backup first if you want to restore them later."),
+    button("Download backup", downloadBackup),
+    error
+  );
+  openDialog("Clear saved data?", panel, "Delete all saved data", () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      error.textContent = "Browser storage could not be cleared. Your records are still available.";
+      return false;
+    }
+    headings = [];
+    resetWorkspace();
+    render();
+    notify("Saved Task Recorder data cleared.");
+  });
+  byId("confirm").classList.add("destructive");
+  byId("cancel").focus();
+});
+
 byId("backup").addEventListener("click", () => {
   const panel = element("div");
-  const download = button("Download backup", () => {
-    const data = JSON.stringify({ format: "fileflow-task-recorder", version: 2, headings }, null, 2);
-    downloadFile(new Blob([data], { type: "application/json" }), "task-recorder-backup.json");
-  });
+  const download = button("Download backup", downloadBackup);
   const label = element("label", "", "Choose a Task Recorder backup");
   const input = element("input");
   input.type = "file";
@@ -888,17 +977,7 @@ byId("backup").addEventListener("click", () => {
       return false;
     }
     headings = restored;
-    undoDeletion = undefined;
-    expanded.clear();
-    drafts.clear();
-    headingNoteDrafts.clear();
-    openHeadingNotes.clear();
-    search.value = "";
-    headingFilter.value = "";
-    statusFilter.value = "";
-    archiveFilter.value = "active";
-    view = "dashboard";
-    storageIssue = "";
+    resetWorkspace();
     save("Backup restored.");
   });
 });
@@ -913,8 +992,12 @@ window.addEventListener("storage", event => {
   if (event.key !== storageKey && event.key !== null) return;
   try {
     headings = normalizeHeadings(JSON.parse(event.newValue ?? "[]"));
-    for (const id of headingNoteDrafts.keys()) {
-      if (!headings.some(heading => heading.id === id)) headingNoteDrafts.delete(id);
+    if (event.newValue === null) resetWorkspace();
+    const noteKeys = new Set(headings.flatMap(heading => [
+      `Heading-${heading.id}`, `Quick-${heading.id}`, ...heading.tasks.map(task => `Task-${task.id}`)
+    ]));
+    for (const key of noteDrafts.keys()) {
+      if (!noteKeys.has(key)) noteDrafts.delete(key);
     }
     undoDeletion = undefined;
     if (dialog.open) dialog.close();

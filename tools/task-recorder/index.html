@@ -7,10 +7,10 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=10">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js?v=4"></script>
-<script defer src="app.js?v=7"></script>
+<script defer src="app.js?v=10"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
@@ -22,9 +22,13 @@
 </div>
 <button id="new" class="outline">New heading</button>
 <button id="new-task" class="primary">＋ New task</button>
+</div>
+<div class="storage-controls" aria-label="Task Recorder storage">
+<span id="storage-used">Storage used · 0 B</span>
+<button id="clear-data" class="clear-data" type="button">Clear saved data</button>
 </div></div></header>
 <main class="workspace-layout">
-<aside class="workspace-actions" aria-label="Export and backup">
+<aside class="workspace-actions" aria-label="Manage saved data">
 <button id="export" type="button">Export to Excel</button>
 <button id="backup" type="button">Backup &amp; Restore</button>
 </aside>
