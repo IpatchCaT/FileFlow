@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="style.css?v=2">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js"></script>
-<script defer src="app.js?v=2"></script>
+<script defer src="app.js?v=3"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
@@ -39,7 +39,7 @@
 <p class="small privacy-note">Tasks are stored in this browser. Backups and Excel exports are saved as local downloads.</p>
 </main>
 <dialog id="dialog" aria-labelledby="dialog-title">
-<form id="dialog-form">
+<form id="dialog-form" autocomplete="off">
 <h2 id="dialog-title"></h2>
 <div id="dialog-body"></div>
 <div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button class="primary" id="confirm" type="submit">Save</button></div>

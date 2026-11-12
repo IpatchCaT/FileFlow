@@ -124,14 +124,14 @@ byId("cancel").addEventListener("click", () => {
 function textDialog(title, label, value, confirm, action) {
   const field = element("label", "", label);
   const input = element("input");
-  input.name = "text";
+  input.autocomplete = "off";
   input.required = true;
   input.maxLength = 300;
   input.value = value;
   field.append(input);
   input.addEventListener("input", () => input.setCustomValidity(""));
-  openDialog(title, field, confirm, data => {
-    const text = data.get("text").trim();
+  openDialog(title, field, confirm, () => {
+    const text = input.value.trim();
     if (!text) {
       input.setCustomValidity("Enter a name.");
       input.reportValidity();
@@ -289,7 +289,9 @@ function headingCard(heading) {
   }
 
   const add = element("form", "add");
+  add.autocomplete = "off";
   const input = element("input");
+  input.autocomplete = "off";
   input.placeholder = "Add task…";
   input.setAttribute("aria-label", `Add task to ${heading.name}`);
   input.id = `add-${heading.id}`;
