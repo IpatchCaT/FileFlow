@@ -474,6 +474,7 @@ function taskRow(heading, task, siblings, showHeading = false) {
   controls.append(edit);
   if (!task.completed && task.due && !heading.archived) {
     const calendar = button("Add to calendar", () => openCalendar(heading, task), "task-calendar");
+    describeControl(calendar, "calendar");
     const icon = element("span", "calendar-icon");
     icon.setAttribute("aria-hidden", "true");
     calendar.prepend(icon);
@@ -1192,6 +1193,109 @@ window.addEventListener("pageshow", refreshCalendar);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshCalendar();
 });
+
+const controlHelp = {
+  new: ["New heading", "Create a heading to group related tasks."],
+  "new-task": ["New task", "Add a task with a due date, status, or notes."],
+  today: ["Today", "See overdue tasks, tasks due today, and follow-ups that need attention."],
+  records: ["Records", "Search and filter your task history."],
+  calendar: ["Add to calendar", "Open Google Calendar or download a calendar event for this deadline."],
+  export: ["Export to Excel", "Download task records as an Excel workbook."],
+  backup: ["Backup & Restore", "Download a backup or restore tasks from a saved backup file."],
+  "clear-data": ["Clear saved data", "Delete this browser’s saved Task Recorder data after confirmation."]
+};
+
+function describeControl(control, key) {
+  control.dataset.help = key;
+  control.setAttribute("aria-describedby", `help-description-${key}`);
+}
+
+const helpDialog = byId("help-dialog");
+const helpControls = byId("help-controls");
+for (const [key, [label, description]] of Object.entries(controlHelp)) {
+  const detail = element("dd", "", description);
+  detail.id = `help-description-${key}`;
+  helpControls.append(element("dt", "", label), detail);
+  if (key !== "calendar") describeControl(byId(key), key);
+}
+byId("help").addEventListener("click", () => {
+  hideTooltip();
+  helpDialog.showModal();
+});
+byId("help-close").addEventListener("click", () => helpDialog.close());
+
+const tooltip = byId("control-tooltip");
+let tooltipAnchor;
+let tooltipTimer;
+let tooltipHideTimer;
+
+function hideTooltip() {
+  clearTimeout(tooltipTimer);
+  clearTimeout(tooltipHideTimer);
+  tooltip.hidden = true;
+  tooltipAnchor = undefined;
+}
+
+function placeTooltip() {
+  if (!tooltipAnchor?.isConnected) {
+    hideTooltip();
+    return;
+  }
+  const anchor = tooltipAnchor.getBoundingClientRect();
+  const { width, height } = tooltip.getBoundingClientRect();
+  const gap = 7;
+  const left = Math.max(gap, Math.min(anchor.left + (anchor.width - width) / 2, innerWidth - width - gap));
+  const top = anchor.bottom + gap + height <= innerHeight
+    ? anchor.bottom + gap
+    : Math.max(gap, anchor.top - height - gap);
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function queueTooltip(anchor, delay) {
+  clearTimeout(tooltipHideTimer);
+  if (tooltipAnchor === anchor && !tooltip.hidden) return;
+  hideTooltip();
+  tooltipAnchor = anchor;
+  tooltipTimer = setTimeout(() => {
+    if (!anchor.isConnected || dialog.open || helpDialog.open) return;
+    tooltip.textContent = controlHelp[anchor.dataset.help][1];
+    tooltip.hidden = false;
+    placeTooltip();
+  }, delay);
+}
+
+function leaveTooltip() {
+  clearTimeout(tooltipTimer);
+  clearTimeout(tooltipHideTimer);
+  tooltipHideTimer = setTimeout(hideTooltip, 160);
+}
+
+document.addEventListener("pointerover", event => {
+  if (event.pointerType !== "mouse") return;
+  const anchor = event.target.closest?.("[data-help]");
+  if (anchor && !anchor.contains(event.relatedTarget)) queueTooltip(anchor, 450);
+});
+document.addEventListener("pointerout", event => {
+  if (event.pointerType === "mouse" && tooltipAnchor?.contains(event.target) &&
+      !tooltipAnchor.contains(event.relatedTarget)) leaveTooltip();
+});
+tooltip.addEventListener("pointerenter", () => clearTimeout(tooltipHideTimer));
+tooltip.addEventListener("pointerleave", event => {
+  if (!tooltipAnchor?.contains(event.relatedTarget)) leaveTooltip();
+});
+document.addEventListener("focusin", event => {
+  if (event.target.matches?.("[data-help]:focus-visible")) queueTooltip(event.target, 0);
+});
+document.addEventListener("focusout", event => {
+  if (event.target === tooltipAnchor) hideTooltip();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && tooltipAnchor) hideTooltip();
+});
+document.addEventListener("click", hideTooltip, true);
+window.addEventListener("resize", hideTooltip);
+window.addEventListener("scroll", hideTooltip, true);
 
 search.value = "";
 render();

@@ -7,10 +7,10 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js?v=4"></script>
-<script defer src="app.js?v=12"></script>
+<script defer src="app.js?v=13"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
@@ -22,6 +22,7 @@
 </div>
 <button id="new" class="outline">New heading</button>
 <button id="new-task" class="primary">＋ New task</button>
+<button id="help" class="outline" type="button">Help</button>
 </div>
 <div class="storage-controls" aria-label="Task Recorder storage">
 <span id="storage-used">Storage used · 0 B</span>
@@ -59,5 +60,11 @@
 <div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button type="button" id="calendar-download" hidden>Download calendar file (.ics)</button><button class="primary" id="confirm" type="submit">Save</button></div>
 </form>
 </dialog>
+<dialog id="help-dialog" aria-labelledby="help-title">
+<h2 id="help-title">Task Recorder help</h2>
+<dl id="help-controls" class="help-controls"></dl>
+<div class="dialog-actions"><button class="primary" id="help-close" type="button">Close</button></div>
+</dialog>
+<div id="control-tooltip" class="control-tooltip" role="tooltip" aria-hidden="true" hidden></div>
 </body>
 </html>
