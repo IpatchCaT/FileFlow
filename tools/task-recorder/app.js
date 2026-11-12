@@ -707,7 +707,43 @@ function renderStorageUsage() {
   }
 }
 
-function render() {
+const headingNameOrder = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+
+function renderHeadingIndex() {
+  const index = byId("heading-index-list");
+  const order = byId("heading-sort").value;
+  const sorted = [...headings];
+  if (order !== "manual") {
+    const direction = order === "za" ? -1 : 1;
+    sorted.sort((first, second) => direction * headingNameOrder.compare(first.name, second.name));
+  }
+
+  const shortcuts = element("ul", "heading-shortcuts");
+  for (const heading of sorted) {
+    const destination = heading.archived ? "archived" : "dashboard";
+    const id = `heading-shortcut-${heading.id}`;
+    const shortcut = button("", () => {
+      clearFilters();
+      view = destination;
+      render({ headingId: heading.id });
+      byId(id)?.focus();
+    }, "heading-shortcut");
+    shortcut.id = id;
+    shortcut.append(element("span", "heading-shortcut-name", heading.name));
+    if (heading.archived) shortcut.append(element("small", "", "Archived"));
+    if (view === destination && headingFilter.value === heading.id) {
+      shortcut.setAttribute("aria-current", "true");
+    }
+    const item = element("li");
+    item.append(shortcut);
+    shortcuts.append(item);
+  }
+  index.replaceChildren(sorted.length ? shortcuts : element("p", "small", "No headings yet."));
+}
+
+byId("heading-sort").addEventListener("change", renderHeadingIndex);
+
+function render({ headingId = headingFilter.value } = {}) {
   renderStorageUsage();
   const isRecords = view === "records";
   [byId("title").textContent, byId("subtitle").textContent] = views[view];
@@ -718,10 +754,10 @@ function render() {
   statusFilter.hidden = sort.hidden = archiveFilter.hidden = !isRecords;
   headingFilter.hidden = view === "weekly";
   search.closest(".search-control").hidden = view === "weekly";
-  const selected = headingFilter.value;
   const visibleHeadings = headings.filter(heading => isRecords || Boolean(heading.archived) === (view === "archived"));
   headingFilter.replaceChildren(new Option("All Headings", ""), ...visibleHeadings.map(heading => new Option(heading.name, heading.id)));
-  headingFilter.value = visibleHeadings.some(heading => heading.id === selected) ? selected : "";
+  headingFilter.value = visibleHeadings.some(heading => heading.id === headingId) ? headingId : "";
+  renderHeadingIndex();
   const records = allRecords();
   const active = records.filter(task => !task.archived);
   renderedDay = calendarDay();
