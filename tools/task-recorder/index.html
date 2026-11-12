@@ -7,10 +7,10 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js?v=4"></script>
-<script defer src="app.js?v=13"></script>
+<script defer src="app.js?v=14"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
@@ -20,8 +20,6 @@
 <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search tasks…" aria-label="Search tasks" aria-keyshortcuts="/">
 <kbd aria-hidden="true">/</kbd>
 </div>
-<button id="new" class="outline">New heading</button>
-<button id="new-task" class="primary">＋ New task</button>
 <button id="help" class="outline" type="button">Help</button>
 </div>
 <div class="storage-controls" aria-label="Task Recorder storage">
@@ -29,6 +27,10 @@
 <button id="clear-data" class="clear-data" type="button">Clear saved data</button>
 </div></div></header>
 <main class="workspace-layout">
+<div class="create-actions" role="group" aria-label="Create work">
+<button id="new-task" class="primary create-button" type="button"><span aria-hidden="true">+</span>New task</button>
+<button id="new" class="create-button" type="button"><span aria-hidden="true">+</span>New heading</button>
+</div>
 <aside class="workspace-actions" aria-label="Manage saved data">
 <button id="export" type="button">Export to Excel</button>
 <button id="backup" type="button">Backup &amp; Restore</button>

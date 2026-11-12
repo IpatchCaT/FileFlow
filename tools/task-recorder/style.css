@@ -43,7 +43,6 @@ nav [aria-current] { background: #e0ebd9; color: #1b4c35; }
 .card { background: #fff; border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 15px; padding: 1rem; box-shadow: 0 3px 8px #203a2c08; min-width: 0; }
 .card-header { display: flex; justify-content: space-between; gap: .5rem; align-items: start; }
 h2 { margin: 0 0 .5rem; font-size: 1.12rem; overflow-wrap: anywhere; }
-.pending { font-size: .78rem; color: #315341; background: #ecf3e8; border-radius: 99px; padding: .23rem .55rem; display: inline-block; }
 ul { list-style: none; margin: .65rem 0; padding: 0; }
 .task { display: flex; align-items: center; justify-content: space-between; gap: .5rem; border-bottom: 1px solid #edf0eb; padding: .35rem 0; }
 .task label { display: flex; gap: .55rem; align-items: center; min-width: 0; overflow-wrap: anywhere; }
@@ -250,3 +249,93 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .help-controls { display: grid; gap: .2rem; }
 .help-controls dt { font-weight: 650; }
 .help-controls dd { margin: 0 0 .65rem; color: var(--muted); }
+
+.create-actions {
+  grid-area: create;
+  display: grid;
+  gap: .55rem;
+  align-self: start;
+}
+.workspace-layout {
+  grid-template-columns: 9.5rem minmax(0, 1fr) 11rem;
+  grid-template-areas: "create workspace actions";
+}
+.create-actions { margin-top: 2.7rem; }
+.create-button {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 44px;
+  font-size: .85rem;
+  font-weight: 700;
+  border-color: #b5c9b5;
+  box-shadow: 0 2px 5px #203a2c12;
+  transition: box-shadow 140ms ease, background-color 140ms ease;
+}
+.create-button.primary { border-color: var(--green); }
+.create-button span {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  border-radius: 6px;
+  background: #e4eee1;
+  color: #214b35;
+  font-size: 1rem;
+}
+.create-button:hover { box-shadow: 0 4px 9px #203a2c26; }
+.create-button:active { box-shadow: inset 0 1px 3px #203a2c35; }
+@media (max-width: 940px) {
+  .workspace-layout { grid-template-columns: minmax(0, 1fr) 11rem; grid-template-areas: "create actions" "workspace actions"; row-gap: 0; }
+  .create-actions { display: flex; flex-wrap: wrap; margin-top: 1rem; }
+}
+@media (max-width: 760px) {
+  .workspace-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "create" "actions" "workspace"; }
+  .toolbar { display: flex; }
+  .toolbar .search-control { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .create-button { transition: none; }
+}
+.status-dot { display: inline-flex; align-items: center; gap: .4rem; }
+.status-dot::before {
+  content: "";
+  width: .55rem;
+  height: .55rem;
+  flex: none;
+  border-radius: 50%;
+  background: #6b8072;
+}
+.status-dot.pending::before, .heading-status.status-dot::before { background: #d1a218; }
+.status-dot.waiting::before, .heading-status.waiting::before { background: #456f9f; }
+.status-dot.completed::before { background: #328258; }
+.status-dot.overdue::before { background: #ba4a45; }
+.status-dot.due-today::before { background: #b66a30; }
+.status-dot.follow-ups-due::before { background: #7960a5; }
+.stat-number { display: inline-flex; }
+.heading-card .card-header {
+  margin: -1rem -1rem .65rem;
+  padding: .9rem 1rem;
+  background: #eaf2e6;
+  border-radius: 11px 11px 0 0;
+}
+.heading-card .card-header h2 { color: #173b29; font-size: 1.3rem; font-weight: 800; }
+.heading-counts { display: flex; flex-wrap: wrap; gap: .4rem .8rem; }
+.heading-status { color: #315341; font-size: .78rem; }
+
+.export-picker { border: 1px solid var(--line); border-radius: 9px; padding: .55rem; }
+.export-picker summary { cursor: pointer; font-weight: 650; padding: .3rem; }
+.export-picker-actions { display: flex; gap: .4rem; flex-wrap: wrap; margin: .45rem 0; }
+.export-picker-actions button { padding: .35rem .55rem; font-size: .85rem; }
+.export-task-list { max-height: 15rem; overflow: auto; }
+#dialog-body .export-task-option {
+  display: flex;
+  align-items: start;
+  margin: 0;
+  padding: .5rem .3rem;
+  border-bottom: 1px solid var(--line);
+}
+.export-task-option input { flex: none; accent-color: var(--green); }
+.export-task-option span { min-width: 0; overflow-wrap: anywhere; }
+.export-task-option small { display: block; color: var(--muted); }

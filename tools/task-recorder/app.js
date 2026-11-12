@@ -540,11 +540,17 @@ function headingCard(heading) {
   const index = headings.indexOf(heading);
   const pending = heading.tasks.filter(task => !task.completed);
   const completed = heading.tasks.filter(task => task.completed);
-  const card = element("article", "card");
+  const card = element("article", "card heading-card");
   card.style.setProperty("--accent", accents[index % accents.length]);
   const header = element("div", "card-header");
   const title = element("div");
-  title.append(element("h2", "", heading.name), element("span", "pending", `${pending.filter(task => !task.waiting).length} pending · ${pending.filter(task => task.waiting).length} waiting`));
+  const waiting = pending.filter(task => task.waiting).length;
+  const counts = element("div", "heading-counts");
+  counts.append(
+    element("span", "heading-status status-dot", `${pending.length - waiting} pending`),
+    element("span", "heading-status status-dot waiting", `${waiting} waiting`)
+  );
+  title.append(element("h2", "", heading.name), counts);
   header.append(title, menu(`Actions for ${heading.name}`, [
     ["Rename heading", () => textDialog("Rename heading", "Heading name", heading.name, "Save changes", name => { heading.name = name; save(); })],
     ["Move earlier", () => reorder(headings, heading, -1), index === 0],
@@ -737,7 +743,9 @@ function render() {
       render();
       byId(destination).focus();
     }, "stat");
-    stat.append(element("strong", "", value), document.createTextNode(label));
+    const number = element("strong", "stat-number status-dot", value);
+    number.classList.add(label.toLowerCase().replaceAll(" ", "-"));
+    stat.append(number, document.createTextNode(label));
     stat.setAttribute("aria-label", `${label}: ${value}`);
     return stat;
   }));
@@ -1058,23 +1066,82 @@ byId("export").addEventListener("click", () => {
   const filtered = view === "today" ? todayGroups(records, calendarDay()).flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
     filteredRecords(records, view === "records").filter(task => view === "records" || view === "weekly" || task.archived === (view === "archived"));
   const options = element("div");
-  for (const [value, title] of [["all", `All tasks (${records.length})`], ["filtered", `Current filters (${filtered.length})`]]) {
+  const picker = element("details", "export-picker");
+  picker.hidden = true;
+  const summary = element("summary", "", "Choose tasks (0 selected)");
+  const list = element("div", "export-task-list");
+  const checkboxes = records.map(task => {
+    const checkbox = element("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "export-task";
+    checkbox.value = task.id;
+    const label = element("label", "export-task-option");
+    const text = element("span");
+    text.append(element("strong", "", task.text), element("small", "", `${task.heading} · ${taskStatus(task)}`));
+    label.append(checkbox, text);
+    list.append(label);
+    return checkbox;
+  });
+  function updateSelection() {
+    const count = checkboxes.filter(checkbox => checkbox.checked).length;
+    summary.textContent = `Choose tasks (${count} selected)`;
+    selectAll.disabled = count === records.length;
+    clearSelection.disabled = count === 0;
+    error.textContent = "";
+  }
+  function checkAll(checked) {
+    for (const checkbox of checkboxes) checkbox.checked = checked;
+    updateSelection();
+  }
+  const error = element("p", "small");
+  error.setAttribute("role", "alert");
+  const actions = element("div", "export-picker-actions");
+  const selectAll = button("Select all", () => checkAll(true));
+  const clearSelection = button("Clear selection", () => checkAll(false));
+  actions.append(selectAll, clearSelection);
+  list.addEventListener("change", updateSelection);
+  picker.append(summary, actions, list);
+  updateSelection();
+
+  for (const [value, title, count] of [
+    ["all", `All tasks (${records.length})`, records.length],
+    ["filtered", `Current filters (${filtered.length})`, filtered.length],
+    ["selected", "Select individual tasks", records.length]
+  ]) {
     const label = element("label", "radio");
     const input = element("input");
     input.type = "radio";
     input.name = "scope";
     input.value = value;
     input.checked = value === "all";
+    input.disabled = count === 0 && value !== "all";
+    input.addEventListener("change", () => {
+      picker.hidden = value !== "selected";
+      if (!picker.hidden) picker.open = true;
+      error.textContent = "";
+    });
     label.append(input, document.createTextNode(title));
     options.append(label);
   }
+  options.append(picker, error);
+
   openDialog("Export to Excel", options, "Download .xlsx", async data => {
+    const scope = data.get("scope");
+    const ids = new Set(data.getAll("export-task"));
+    const tasks = scope === "selected" ? records.filter(task => ids.has(task.id)) : scope === "filtered" ? filtered : records;
+    if (scope === "selected" && !tasks.length) {
+      picker.open = true;
+      error.textContent = "Select at least one task to export.";
+      summary.focus();
+      return false;
+    }
     try {
-      const blob = await makeWorkbook(data.get("scope") === "all" ? records : filtered);
+      const blob = await makeWorkbook(tasks);
       downloadFile(blob, "task-records.xlsx");
       notify("Excel workbook downloaded.");
     } catch {
-      notify("The Excel export failed. Try again.");
+      error.textContent = "The Excel export failed. Try again.";
+      return false;
     }
   });
 });
@@ -1200,7 +1267,7 @@ const controlHelp = {
   today: ["Today", "See overdue tasks, tasks due today, and follow-ups that need attention."],
   records: ["Records", "Search and filter your task history."],
   calendar: ["Add to calendar", "Open Google Calendar or download a calendar event for this deadline."],
-  export: ["Export to Excel", "Download task records as an Excel workbook."],
+  export: ["Export to Excel", "Download all tasks, filtered tasks, or individual tasks as an Excel workbook."],
   backup: ["Backup & Restore", "Download a backup or restore tasks from a saved backup file."],
   "clear-data": ["Clear saved data", "Delete this browser’s saved Task Recorder data after confirmation."]
 };
