@@ -143,3 +143,10 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   .workspace-actions { position: static; margin-top: .8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workspace-main .intro { padding-top: 1.5rem; }
 }
+
+.heading-notes { margin-top: .75rem; border: 1px solid var(--line); border-radius: 9px; background: #f9faf7; }
+.heading-notes-summary { cursor: pointer; padding: .55rem .65rem; font-size: .85rem; font-weight: 650; }
+.heading-note-preview { display: block; margin-top: .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 400; }
+.heading-notes[open] .heading-note-preview { display: none; }
+.heading-note-input { display: block; width: calc(100% - 1.3rem); margin: .1rem .65rem .5rem; color: inherit; background: white; }
+.heading-notes > button { margin: 0 .65rem .65rem; padding: .4rem .65rem; font-size: .82rem; font-weight: 650; }

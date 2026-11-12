@@ -13,6 +13,9 @@ const dialogBody = byId("dialog-body");
 const form = byId("dialog-form");
 const expanded = new Set();
 const drafts = new Map();
+const headingNoteDrafts = new Map();
+const openHeadingNotes = new Set();
+const headingNoteLimit = 4000;
 const accents = ["#6c9c77", "#c5955b", "#8191b6", "#a581a0"];
 
 let headings = [];
@@ -107,7 +110,8 @@ function normalizeHeadings(data) {
   const optionalDay = value => value === undefined || value === "" || validDay(value);
   const optionalFlag = value => value === undefined || typeof value === "boolean";
   return data.map(heading => {
-    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks) || !optionalFlag(heading.archived)) {
+    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks) || !optionalFlag(heading.archived) ||
+        !optionalText(heading.notes, headingNoteLimit)) {
       throw new Error("Invalid heading");
     }
     const tasks = heading.tasks.map(task => {
@@ -122,7 +126,7 @@ function normalizeHeadings(data) {
         waitingFor: task.waitingFor ?? "", notes: task.notes ?? "", link: task.link ?? ""
       };
     });
-    return { id: heading.id, name: heading.name, archived: Boolean(heading.archived), tasks };
+    return { id: heading.id, name: heading.name, archived: Boolean(heading.archived), notes: heading.notes ?? "", tasks };
   });
 }
 
@@ -241,6 +245,8 @@ function removeHeading(heading) {
     undoDeletion = () => headings.splice(index, 0, heading);
     expanded.delete(heading.id);
     drafts.delete(heading.id);
+    headingNoteDrafts.delete(heading.id);
+    openHeadingNotes.delete(heading.id);
     save("Heading deleted.");
   };
   if (!heading.tasks.length) return remove();
@@ -329,6 +335,47 @@ function taskList(heading, siblings) {
   return list;
 }
 
+function headingNotesPanel(heading) {
+  const panel = element("details", "heading-notes");
+  const summary = element("summary", "heading-notes-summary");
+  summary.append(element("span", "", "Heading notes"));
+  if (heading.notes?.trim()) {
+    summary.append(element("span", "heading-note-preview", heading.notes.trim().replace(/\s+/g, " ")));
+  }
+  panel.open = openHeadingNotes.has(heading.id);
+  panel.addEventListener("toggle", () => {
+    if (!panel.isConnected) return;
+    if (panel.open) openHeadingNotes.add(heading.id);
+    else openHeadingNotes.delete(heading.id);
+  });
+
+  const input = element("textarea", "heading-note-input");
+  input.id = `heading-notes-${heading.id}`;
+  input.setAttribute("aria-label", `Heading notes for ${heading.name}`);
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.rows = 4;
+  input.maxLength = headingNoteLimit;
+  input.placeholder = "Add project notes, decisions, or reminders…";
+  const saved = heading.notes ?? "";
+  input.value = headingNoteDrafts.get(heading.id) ?? saved;
+  const saveNote = button("Save notes", () => {
+    heading.notes = input.value;
+    headingNoteDrafts.delete(heading.id);
+    openHeadingNotes.add(heading.id);
+    save("Heading notes saved.");
+    byId(input.id)?.focus();
+  });
+  saveNote.disabled = input.value === saved;
+  input.addEventListener("input", () => {
+    saveNote.disabled = input.value === saved;
+    if (saveNote.disabled) headingNoteDrafts.delete(heading.id);
+    else headingNoteDrafts.set(heading.id, input.value);
+  });
+  panel.append(summary, input, saveNote);
+  return panel;
+}
+
 function headingCard(heading) {
   const index = headings.indexOf(heading);
   const pending = heading.tasks.filter(task => !task.completed);
@@ -350,7 +397,7 @@ function headingCard(heading) {
     }],
     ["Delete heading", () => removeHeading(heading)]
   ]));
-  card.append(header);
+  card.append(header, headingNotesPanel(heading));
   if (heading.tasks.length) {
     const progress = element("progress", "heading-progress");
     progress.max = heading.tasks.length;
@@ -570,8 +617,9 @@ function editTask(task, creating = false) {
   const due = field("Due date", element("input"), task.due, "date");
   const waitingFor = field("Waiting for", element("input"), task.waitingFor, "text", 300);
   const followUp = field("Follow-up date", element("input"), task.followUp, "date");
-  const notes = field("Notes", element("textarea"), task.notes, undefined, 4000);
-  notes.rows = 3;
+  const notes = field("Task notes", element("textarea"), task.notes, undefined, 4000);
+  notes.rows = 5;
+  notes.placeholder = "Add details about this task…";
   const link = field("Reference link", element("input"), task.link, "url", 2000);
   function showWaitingFields() {
     waitingFor.parentElement.hidden = followUp.parentElement.hidden = statusSelect.value !== "Waiting";
@@ -843,6 +891,8 @@ byId("backup").addEventListener("click", () => {
     undoDeletion = undefined;
     expanded.clear();
     drafts.clear();
+    headingNoteDrafts.clear();
+    openHeadingNotes.clear();
     search.value = "";
     headingFilter.value = "";
     statusFilter.value = "";
@@ -863,6 +913,9 @@ window.addEventListener("storage", event => {
   if (event.key !== storageKey && event.key !== null) return;
   try {
     headings = normalizeHeadings(JSON.parse(event.newValue ?? "[]"));
+    for (const id of headingNoteDrafts.keys()) {
+      if (!headings.some(heading => heading.id === id)) headingNoteDrafts.delete(id);
+    }
     undoDeletion = undefined;
     if (dialog.open) dialog.close();
     render();
