@@ -179,3 +179,13 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   .toolbar { flex-basis: 100%; }
   .storage-controls { justify-content: space-between; }
 }
+
+.today-group-header { display: flex; align-items: center; gap: .5rem; }
+.today-count {
+  border-radius: 999px;
+  background: #e8efe4;
+  color: var(--green);
+  padding: .2rem .5rem;
+  font-size: .8rem;
+  font-weight: 650;
+}

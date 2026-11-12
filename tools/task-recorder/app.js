@@ -25,6 +25,8 @@ let submitDialog;
 let undoDeletion;
 let selectedWeek = "";
 let todaySection = "";
+let renderedDay = "";
+let midnightTimer;
 
 const views = {
   dashboard: ["Work dashboard", "Organise your work and check off tasks as you go."],
@@ -567,12 +569,15 @@ function render() {
   headingFilter.value = visibleHeadings.some(heading => heading.id === selected) ? selected : "";
   const records = allRecords();
   const active = records.filter(task => !task.archived);
-  const today = calendarDay();
-  const dueFollowUps = active.filter(task => !task.completed && task.waiting && task.followUp && task.followUp <= today).length;
+  renderedDay = calendarDay();
+  const deadlineMetrics = deadlineGroups(active, renderedDay).map(group => [
+    group.title === "Follow-ups" ? "Follow-ups due" : group.title,
+    group.tasks.length, "today", group.title
+  ]);
   const metrics = [
     ["Active headings", headings.filter(heading => !heading.archived).length, "dashboard", ""],
     ...["Pending", "Waiting", "Completed"].map(status => [status, active.filter(task => taskStatus(task) === status).length, "records", status]),
-    ["Follow-ups due", dueFollowUps, "today", "Follow-ups"]
+    ...deadlineMetrics
   ];
   byId("totals").replaceChildren(...metrics.map(([label, value, destination, filter]) => {
     const stat = button("", () => {
@@ -595,7 +600,7 @@ function render() {
   if (isRecords) {
     content.replaceChildren(recordsTable(filteredRecords(records)));
   } else if (view === "today") {
-    content.replaceChildren(todayView());
+    content.replaceChildren(todayView(records, renderedDay));
   } else if (view === "weekly") {
     content.replaceChildren(weeklyView(records));
   } else if (visibleHeadings.length) {
@@ -704,23 +709,41 @@ function editTask(task, creating = false) {
   if (creating) title.focus();
 }
 
-function todayGroups() {
-  const today = calendarDay();
-  const open = allRecords().filter(task => !task.archived && !task.completed && matches(task) &&
-    (!headingFilter.value || task.headingId === headingFilter.value));
+function deadlineGroups(records, day) {
+  const open = records.filter(task => !task.archived && !task.completed);
   return [
-    { title: "Overdue", tasks: open.filter(task => task.due && task.due < today).sort((a, b) => a.due.localeCompare(b.due)) },
-    { title: "Due today", tasks: open.filter(task => task.due === today) },
-    { title: "Follow-ups", tasks: open.filter(task => task.waiting && task.followUp && task.followUp <= today)
-      .sort((a, b) => a.followUp.localeCompare(b.followUp)) }
-  ].filter(group => !todaySection || group.title === todaySection);
+    {
+      title: "Overdue",
+      empty: "No open tasks with a deadline before today.",
+      tasks: open.filter(task => task.due && task.due < day).sort((a, b) => a.due.localeCompare(b.due))
+    },
+    {
+      title: "Due today",
+      empty: "No open tasks with a deadline today.",
+      tasks: open.filter(task => task.due === day)
+    },
+    {
+      title: "Follow-ups",
+      empty: "No waiting tasks with a follow-up due today or earlier.",
+      tasks: open.filter(task => task.waiting && task.followUp && task.followUp <= day)
+        .sort((a, b) => a.followUp.localeCompare(b.followUp))
+    }
+  ];
 }
 
-function todayView() {
+function todayGroups(records, day) {
+  const visible = records.filter(task => matches(task) &&
+    (!headingFilter.value || task.headingId === headingFilter.value));
+  return deadlineGroups(visible, day).filter(group => !todaySection || group.title === todaySection);
+}
+
+function todayView(records, day) {
   const grid = element("div", "grid");
-  for (const group of todayGroups()) {
+  for (const group of todayGroups(records, day)) {
     const card = element("article", "card");
-    card.append(element("h2", "", group.title));
+    const header = element("div", "today-group-header");
+    header.append(element("h2", "", group.title), element("span", "today-count", String(group.tasks.length)));
+    card.append(header);
     if (group.tasks.length) {
       const list = element("ul");
       for (const record of group.tasks) {
@@ -730,7 +753,7 @@ function todayView() {
       }
       card.append(list);
     } else {
-      card.append(element("p", "small", "No tasks."));
+      card.append(element("p", "small", search.value.trim() || headingFilter.value ? "No tasks match your filters." : group.empty));
     }
     grid.append(card);
   }
@@ -883,7 +906,7 @@ for (const filter of [headingFilter, statusFilter, sort, archiveFilter]) filter.
 
 byId("export").addEventListener("click", () => {
   const records = allRecords();
-  const filtered = view === "today" ? todayGroups().flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
+  const filtered = view === "today" ? todayGroups(records, calendarDay()).flatMap(group => group.tasks).filter((record, index, list) => list.findIndex(item => item.id === record.id) === index) :
     filteredRecords(records, view === "records").filter(task => view === "records" || view === "weekly" || task.archived === (view === "archived"));
   const options = element("div");
   for (const [value, title] of [["all", `All tasks (${records.length})`], ["filtered", `Current filters (${filtered.length})`]]) {
@@ -1008,6 +1031,21 @@ window.addEventListener("storage", event => {
   }
 });
 
+function refreshCalendar() {
+  clearTimeout(midnightTimer);
+  if (calendarDay() !== renderedDay) render();
+  const nextDay = new Date();
+  nextDay.setHours(24, 0, 0, 0);
+  midnightTimer = setTimeout(refreshCalendar, Math.max(0, nextDay.getTime() - Date.now()) + 50);
+}
+
+window.addEventListener("focus", refreshCalendar);
+window.addEventListener("pageshow", refreshCalendar);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshCalendar();
+});
+
 search.value = "";
 render();
 notify();
+refreshCalendar();
