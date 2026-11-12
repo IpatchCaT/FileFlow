@@ -160,6 +160,8 @@ function button(text, action, className = "") {
 }
 
 function openDialog(title, field, confirmText, action) {
+  byId("calendar-download").hidden = true;
+  byId("calendar-download").onclick = null;
   byId("dialog-title").textContent = title;
   dialogBody.replaceChildren(field);
   byId("confirm").textContent = confirmText;
@@ -280,6 +282,144 @@ function matches(task) {
   return [task.text, task.notes, task.link, task.waitingFor].some(value => value?.toLocaleLowerCase().includes(query));
 }
 
+function calendarTimestamp(date) {
+  return date.toISOString().replace(/[-:]|\.\d{3}/g, "");
+}
+
+function calendarText(value) {
+  return value.replace(/\\/g, "\\\\").replace(/\r\n|\r|\n/g, "\\n").replace(/[,;]/g, "\\$&");
+}
+
+function foldCalendarLine(line) {
+  const encoder = new TextEncoder();
+  let folded = "";
+  let bytes = 0;
+  for (const character of line) {
+    const size = encoder.encode(character).length;
+    if (bytes + size > 75) {
+      folded += "\r\n ";
+      bytes = 1;
+    }
+    folded += character;
+    bytes += size;
+  }
+  return folded;
+}
+
+function calendarReminder(start, now) {
+  const previousDay = new Date(start);
+  previousDay.setDate(previousDay.getDate() - 1);
+  if (previousDay > now) return { time: previousDay, label: "one day before" };
+
+  const earlier = new Date(start.getTime() - 15 * 60_000);
+  if (earlier > now && calendarDay(earlier) === calendarDay(start)) {
+    return { time: earlier, label: "15 minutes before" };
+  }
+  return { time: start, label: "at the event time" };
+}
+
+function calendarFile(event, taskId, now) {
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FileFlow//Task Recorder//EN",
+    "BEGIN:VEVENT", `UID:${taskId}@fileflow-task-recorder`,
+    `DTSTAMP:${calendarTimestamp(now)}`,
+    `DTSTART:${calendarTimestamp(event.start)}`,
+    `DTEND:${calendarTimestamp(event.end)}`,
+    `SUMMARY:${calendarText(event.title)}`,
+    `DESCRIPTION:${calendarText(event.details)}`,
+    "BEGIN:VALARM", "ACTION:DISPLAY",
+    `TRIGGER;VALUE=DATE-TIME:${calendarTimestamp(event.reminder.time)}`,
+    `DESCRIPTION:${calendarText(event.title)}`,
+    "END:VALARM", "END:VEVENT", "END:VCALENDAR"
+  ].map(foldCalendarLine).join("\r\n") + "\r\n";
+}
+
+function openCalendar(heading, task) {
+  const panel = element("div", "calendar-dialog");
+  const fields = element("div", "calendar-fields");
+  const eventDate = element("input");
+  eventDate.type = "date";
+  eventDate.required = true;
+  eventDate.value = task.due;
+  eventDate.min = calendarDay();
+  const eventTime = element("input");
+  eventTime.type = "time";
+  eventTime.required = true;
+  eventTime.value = "09:00";
+  const dateLabel = element("label", "", "Calendar date");
+  const timeLabel = element("label", "", "Calendar time");
+  dateLabel.append(eventDate);
+  timeLabel.append(eventTime);
+  fields.append(dateLabel, timeLabel);
+  const reminderHint = element("p", "small");
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const title = `Due · ${task.text}`;
+  const details = `Heading: ${heading.name}\nOriginal due date: ${task.due}`;
+  panel.append(
+    element("strong", "", task.text),
+    element("p", "small", `${heading.name} · Due ${displayDay(task.due)}`),
+    fields,
+    element("p", "small", zone ? `Time zone: ${zone}` : "Device local time"),
+    reminderHint,
+    element("p", "small", "Confirm the reminder in your calendar and choose email or a device notification if available."),
+    element("p", "small", "If the task is rescheduled or completed, update or remove the event in your calendar.")
+  );
+
+  function selectedStart() {
+    return new Date(`${eventDate.value}T${eventTime.value}`);
+  }
+
+  function refreshReminder() {
+    eventDate.setCustomValidity("");
+    eventTime.setCustomValidity("");
+    const start = selectedStart();
+    const now = new Date();
+    reminderHint.textContent = start > now
+      ? `Suggested reminder: ${calendarReminder(start, now).label}.`
+      : "Choose a future calendar date and time. The original due date stays in the event details.";
+  }
+
+  function selectedEvent() {
+    refreshReminder();
+    const now = new Date();
+    eventDate.min = calendarDay(now);
+    if (!eventDate.reportValidity() || !eventTime.reportValidity()) return null;
+    const start = selectedStart();
+    if (!(start > now) || calendarDay(start) !== eventDate.value ||
+        start.toTimeString().slice(0, 5) !== eventTime.value) {
+      eventTime.setCustomValidity("Choose a valid future time in your time zone.");
+      eventTime.reportValidity();
+      return null;
+    }
+    return { title, details, start, end: new Date(start.getTime() + 15 * 60_000), reminder: calendarReminder(start, now) };
+  }
+
+  eventDate.addEventListener("input", refreshReminder);
+  eventTime.addEventListener("input", refreshReminder);
+  refreshReminder();
+  openDialog("Add to calendar", panel, "Open in Google Calendar", () => {
+    const event = selectedEvent();
+    if (!event) return false;
+    const url = new URL("https://calendar.google.com/calendar/render");
+    url.search = new URLSearchParams({
+      action: "TEMPLATE", text: event.title, details: event.details,
+      dates: `${calendarTimestamp(event.start)}/${calendarTimestamp(event.end)}`
+    });
+    window.open(url.href, "_blank", "noopener,noreferrer");
+    notify("Finish saving in Google Calendar.");
+  });
+  const download = byId("calendar-download");
+  download.hidden = false;
+  download.onclick = () => {
+    const event = selectedEvent();
+    if (!event) return;
+    const file = new Blob([calendarFile(event, task.id, new Date())], { type: "text/calendar;charset=utf-8" });
+    downloadFile(file, "fileflow-deadline.ics");
+    dialog.close();
+    notify("Calendar file downloaded.");
+  };
+}
+
 function taskRow(heading, task, siblings, showHeading = false) {
   const row = element("li", task.completed ? "task done" : "task");
   const label = element("label");
@@ -331,7 +471,15 @@ function taskRow(heading, task, siblings, showHeading = false) {
   const controls = element("div", "task-controls");
   const edit = button("Edit", () => editTask(task), "task-edit");
   edit.setAttribute("aria-label", `Edit task: ${task.text}`);
-  controls.append(edit, menu(`Actions for ${task.text}`, actions));
+  controls.append(edit);
+  if (!task.completed && task.due && !heading.archived) {
+    const calendar = button("Add to calendar", () => openCalendar(heading, task), "task-calendar");
+    const icon = element("span", "calendar-icon");
+    icon.setAttribute("aria-hidden", "true");
+    calendar.prepend(icon);
+    controls.append(calendar);
+  }
+  controls.append(menu(`Actions for ${task.text}`, actions));
   const line = element("div", "task-line");
   line.append(label, controls);
   row.append(line);
@@ -408,7 +556,7 @@ function headingCard(heading) {
     }],
     ["Delete heading", () => removeHeading(heading)]
   ]));
-  card.append(header, notesPanel(heading, "Heading", heading.name));
+  card.append(header);
   if (heading.tasks.length) {
     const progress = element("progress", "heading-progress");
     progress.max = heading.tasks.length;

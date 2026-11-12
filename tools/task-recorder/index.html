@@ -7,10 +7,10 @@
 <meta name="theme-color" content="#172c24">
 <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'">
 <title>Task Recorder</title>
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 <script defer src="jszip.min.js"></script>
 <script defer src="workbook.js?v=4"></script>
-<script defer src="app.js?v=11"></script>
+<script defer src="app.js?v=12"></script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
@@ -56,7 +56,7 @@
 <form id="dialog-form" autocomplete="off">
 <h2 id="dialog-title"></h2>
 <div id="dialog-body"></div>
-<div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button class="primary" id="confirm" type="submit">Save</button></div>
+<div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button type="button" id="calendar-download" hidden>Download calendar file (.ics)</button><button class="primary" id="confirm" type="submit">Save</button></div>
 </form>
 </dialog>
 </body>
