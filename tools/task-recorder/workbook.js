@@ -10,7 +10,7 @@ const recordFields = [
   { label: "Due date", value: task => task.due, type: "day" },
   { label: "Waiting for", value: task => task.waitingFor, width: 30 },
   { label: "Follow-up date", value: task => task.followUp, type: "day" },
-  { label: "Notes", value: task => noteLines(task.notes).map((line, i) => `${task.noteChecks?.[i] ? "[x]" : "[ ]"} ${line}`).join("\n"), width: 48 },
+  { label: "Checklist", value: task => noteLines(task.notes).map((line, i) => `${task.noteChecks?.[i] ? "[x]" : "[ ]"} ${line}`).join("\n"), width: 48 },
   { label: "Reference link", value: task => task.link, width: 40 },
   { label: "Archive status", value: task => task.archived ? "Archived" : "Active" }
 ];

@@ -405,3 +405,13 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .heading-body[hidden] { display: none; }
 .heading-card .card-header { flex-wrap: wrap; }
 .heading-card .card-header > div:first-child { flex: 1; min-width: 140px; }
+.editable-check-item { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #d9e5dc; border-radius: 8px; background: #f5f8f5; }
+.editable-check-item input[type="checkbox"] { flex: 0 0 18px; width: 18px; height: 18px; accent-color: #427253; }
+.editable-check-item .checklist-item-input { flex: 1; min-width: 0; width: 100%; background: white; color: #294832; }
+.editable-check-item.checked .checklist-item-input { text-decoration: line-through; color: #68796d; }
+.checklist-remove { padding: 7px; font-size: .78rem; }
+.checklist-add { margin: 8px 0; }
+@media(max-width: 480px) { .editable-check-item { flex-wrap: wrap; } .checklist-remove { margin-left: auto; } }
+.heading-card .heading-collapse { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; font-size: 1.3rem; border-radius: 8px; }
+.heading-card .card-header > div { flex: 1; min-width: 0; }
+.heading-card .heading-collapse:focus-visible { outline: 3px solid #75aa87; outline-offset: 3px; }

@@ -520,53 +520,91 @@ function reconcileNoteChecks(previous, checks, next) {
 
 function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
   const panel = element("div", "note-editor");
-  const input = element("textarea", "heading-note-input");
+  // Retain the existing storage format for compatibility with saved records.
+  const input = element("input");
+  input.type = "hidden";
   input.value = initialText;
-  input.rows = 4;
-  input.maxLength = noteLimit;
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.setAttribute("aria-label", label);
-  input.placeholder = "Write one checklist item per line…";
-  let previous = input.value;
-  let checks = reconcileNoteChecks(record.notes, record.noteChecks, input.value);
+  const initialChecks = reconcileNoteChecks(record.notes, record.noteChecks, initialText);
+  let items = noteLines(initialText).map((text, i) => ({ text, checked: initialChecks[i] }));
   const list = element("ul", "note-checklist");
+  const error = element("p", "small");
+  error.setAttribute("role", "alert");
+  const nonempty = () => items.filter(item => item.text.trim());
+  function sync() {
+    input.value = nonempty().map(item => item.text.trim()).join("\n");
+    input.dispatchEvent(new Event("input"));
+  }
   function draw() {
     list.replaceChildren();
-    noteLines(input.value).forEach((text, index) => {
-      const item = element("li");
-      const label = element("label", checks[index] ? "note-item checked" : "note-item");
+    items.forEach((item, index) => {
+      const row = element("li", item.checked ? "editable-check-item checked" : "editable-check-item");
       const checkbox = element("input");
       checkbox.type = "checkbox";
-      checkbox.checked = checks[index];
+      checkbox.checked = item.checked;
       checkbox.id = `note-check-${record.id}-${index}`;
-      checkbox.addEventListener("change", () => {
-        checks[index] = checkbox.checked;
-        label.className = checks[index] ? "note-item checked" : "note-item";
-        if (onCheck) onCheck(input.value, [...checks], checkbox.id);
+      checkbox.setAttribute("aria-label", `Complete checklist item ${index + 1}`);
+      const text = element("input", "checklist-item-input");
+      text.type = "text";
+      text.value = item.text;
+      text.maxLength = noteLimit;
+      text.autocomplete = "off";
+      text.spellcheck = false;
+      text.placeholder = "Enter checklist item…";
+      text.setAttribute("aria-label", `${label}, item ${index + 1}`);
+      text.addEventListener("input", () => {
+        const previous = item.text;
+        item.text = text.value;
+        if (nonempty().map(item => item.text.trim()).join("\n").length > noteLimit) {
+          item.text = previous;
+          text.value = previous;
+          error.textContent = "This checklist can contain up to 4,000 characters.";
+          return;
+        }
+        error.textContent = "";
+        sync();
       });
-      label.append(checkbox, element("span", "note-item-text", text));
-      item.append(label);
-      list.append(item);
+      text.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addItem();
+        }
+      });
+      checkbox.addEventListener("change", () => {
+        item.checked = checkbox.checked;
+        row.className = item.checked ? "editable-check-item checked" : "editable-check-item";
+        sync();
+        if (onCheck && item.text.trim()) onCheck(input.value, nonempty().map(item => item.checked), checkbox.id);
+      });
+      const remove = button("Remove", () => {
+        items.splice(index, 1);
+        sync();
+        draw();
+        add.focus();
+      }, "checklist-remove");
+      remove.setAttribute("aria-label", `Remove checklist item ${index + 1}`);
+      row.append(checkbox, text, remove);
+      list.append(row);
     });
   }
-  input.addEventListener("input", () => {
-    checks = reconcileNoteChecks(previous, checks, input.value);
-    previous = input.value;
+  function addItem() {
+    items.push({text: "", checked: false});
     draw();
-  });
-  panel.append(list, element("p", "small", "One item per line. Tick each item when finished."), input);
+    list.querySelector("li:last-child .checklist-item-input")?.focus();
+  }
+  const add = button("+ Add item", addItem, "checklist-add");
+  panel.append(list, add, error, input);
   draw();
-  return { panel, input, getChecks: () => [...checks] };
+  return { panel, input, getChecks: () => nonempty().map(item => item.checked) };
 }
 
 function notesPanel(record, kind, name) {
   const key = `${kind}-${record.id}`;
   const panel = element("details", "heading-notes");
   const summary = element("summary", "heading-notes-summary");
+  summary.id = `checklist-summary-${record.id}`;
   const count = noteLines(record.notes).length;
   const done = (record.noteChecks ?? []).filter(Boolean).length;
-  summary.append(element("span", "", count ? `${kind} notes · ${done}/${count} done` : `${kind} notes`));
+  summary.append(element("span", "", count ? `Checklist · ${done}/${count} done` : "Checklist"));
   if (record.notes?.trim()) summary.append(element("span", "heading-note-preview", record.notes.trim().replace(/\s+/g, " ")));
   panel.open = openNotePanels.has(key);
   panel.addEventListener("toggle", () => {
@@ -579,14 +617,14 @@ function notesPanel(record, kind, name) {
     record.noteChecks = checks;
     noteDrafts.delete(key);
     openNotePanels.add(key);
-    save("Notes checklist saved.");
+    save("Checklist saved.");
     byId(focusId)?.focus();
   }
-  const editor = noteEditor(record, `Notes checklist for ${name}`, noteDrafts.get(key) ?? record.notes ?? "", commit);
+  const editor = noteEditor(record, `Checklist for ${name}`, noteDrafts.get(key) ?? record.notes ?? "", commit);
   editor.input.id = `notes-${key}`;
-  const saveNote = button("Save notes", () => commit(editor.input.value, editor.getChecks(), editor.input.id));
+  const saveNote = button("Save checklist", () => commit(editor.input.value, editor.getChecks(), `checklist-summary-${record.id}`));
   editor.input.addEventListener("input", () => noteDrafts.set(key, editor.input.value));
-  panel.append(summary, editor.panel, element("p", "small", "Save notes after editing. Ticking an item saves the current list automatically."), saveNote);
+  panel.append(summary, editor.panel, element("p", "small", "Save your edits with Save checklist. Ticking an item saves the current list automatically."), saveNote);
   return panel;
 }
 
@@ -618,7 +656,7 @@ function headingCard(heading) {
     ["Delete heading", () => removeHeading(heading)]
   ]));
   const contentsId = `heading-contents-${heading.id}`;
-  const toggle = button(heading.collapsed ? "Show contents" : "Hide contents", () => {
+  const toggle = button(heading.collapsed ? "▸" : "▾", () => {
     heading.collapsed = !heading.collapsed;
     save();
     byId(`heading-toggle-${heading.id}`)?.focus();
@@ -627,7 +665,7 @@ function headingCard(heading) {
   toggle.setAttribute("aria-expanded", String(!heading.collapsed));
   toggle.setAttribute("aria-controls", contentsId);
   toggle.setAttribute("aria-label", `${heading.collapsed ? "Show" : "Hide"} contents of ${heading.name}`);
-  header.append(toggle);
+  header.prepend(toggle);
   card.append(header);
   const body = element("div", "heading-body");
   body.id = contentsId;
@@ -689,21 +727,15 @@ function quickAdd(heading, group) {
   const noteKey = `Quick-${draftKey}`;
   const quickNotes = element("details", "heading-notes quick-notes");
   quickNotes.open = openNotePanels.has(noteKey);
-  const quickInput = element("textarea", "heading-note-input");
-  quickInput.setAttribute("aria-label", `Notes for new task in ${heading.name}`);
-  quickInput.autocomplete = "off";
-  quickInput.spellcheck = false;
-  quickInput.rows = 3;
-  quickInput.maxLength = noteLimit;
-  quickInput.placeholder = "One note checklist item per line…";
-  quickInput.value = noteDrafts.get(noteKey) ?? "";
+  const quickEditor = noteEditor({ id: draftKey, notes: "", noteChecks: [] }, `Checklist for new task in ${heading.name}`, noteDrafts.get(noteKey) ?? "");
+  const quickInput = quickEditor.input;
   quickInput.addEventListener("input", () => noteDrafts.set(noteKey, quickInput.value));
   quickNotes.addEventListener("toggle", () => {
     if (!quickNotes.isConnected) return;
     if (quickNotes.open) openNotePanels.add(noteKey);
     else openNotePanels.delete(noteKey);
   });
-  quickNotes.append(element("summary", "heading-notes-summary", "Add task notes (optional)"), quickInput);
+  quickNotes.append(element("summary", "heading-notes-summary", "Add checklist (optional)"), quickEditor.panel);
   add.append(input, submit, quickNotes);
   add.addEventListener("submit", event => {
     event.preventDefault();
@@ -711,7 +743,7 @@ function quickAdd(heading, group) {
     if (!text) return;
     const task = newTask(text);
     task.notes = quickInput.value;
-    task.noteChecks = noteLines(task.notes).map(() => false);
+    task.noteChecks = quickEditor.getChecks();
     task.subheadingId = group.id;
     heading.tasks.push(task);
     drafts.delete(draftKey);
@@ -973,8 +1005,8 @@ function editTask(task, creating = false) {
   const due = field("Due date", element("input"), task.due, "date");
   const waitingFor = field("Waiting for", element("input"), task.waitingFor, "text", 300);
   const followUp = field("Follow-up date", element("input"), task.followUp, "date");
-  const notesEditor = noteEditor(task, "Task notes — one item per line");
-  panel.append(element("strong", "", "Task notes checklist"), notesEditor.panel);
+  const notesEditor = noteEditor(task, "Task checklist");
+  panel.append(element("strong", "", "Checklist"), notesEditor.panel);
   const notes = notesEditor.input;
   const link = field("Reference link", element("input"), task.link, "url", 2000);
   function showWaitingFields() {
@@ -1441,7 +1473,7 @@ document.addEventListener("visibilitychange", () => {
 
 const controlHelp = {
   new: ["New heading", "Create the main work title, then add highlighted subheadings and checklist items."],
-  "new-task": ["New task", "Add a task with a due date, status, or notes."],
+  "new-task": ["New task", "Add a task with a due date, status, or editable checklist."],
   today: ["Today", "See overdue tasks, tasks due today, and follow-ups that need attention."],
   records: ["Records", "Search and filter your task history."],
   calendar: ["Add to calendar", "Open Google Calendar or download a calendar event for this deadline."],

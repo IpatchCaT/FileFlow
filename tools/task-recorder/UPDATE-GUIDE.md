@@ -1,20 +1,17 @@
-# Task notes checklists and collapsible main headings
+# Editable checklists and individual heading dropdowns
 
-Replace index.html, app.js, style.css and workbook.js together in tools/task-recorder/ using GitHub's upload interface. Extract the ZIP first. The included JSZip files are unchanged. Download a JSON backup from your current app before uploading. Refresh after GitHub Pages finishes deploying.
+## Upload
+Download a backup from your current app. Extract this ZIP and upload index.html, app.js, style.css and workbook.js together to tools/task-recorder/ in GitHub. The included JSZip files are unchanged. Refresh after the Pages deployment finishes.
 
-## Notes checklists
-Each non-empty line in task notes becomes a separate checkbox item. Existing text is preserved, with one checklist item per non-empty line. Open Task notes to tick items. Checked items have a strikethrough and the summary shows how many are done.
+## Editable checklist
+The Notes editor is replaced by Checklist. Each checklist row has a checkbox, directly editable text and a Remove button. Select + Add item to add a row; Enter while editing also adds a row. Select Save checklist after edits. Ticking an item saves the current checklist automatically. Blank rows are omitted when saving. Editing an existing row preserves its checked state.
 
-Edit the text below the list, one item per line, then select Save notes. Ticking a checkbox automatically saves the current notes text and checklist state. Edit Task uses the same checklist; its changes are committed with Save changes. Quick Add accepts one notes item per line.
+Quick Add offers Add checklist (optional). Edit Task uses the same editable rows and saves them with Save changes. Existing notes become checklist rows and existing checks are preserved. Checklist checks are independent of the parent work item's completion.
 
-Unchanged lines keep their checked state when you reorder them. Renamed and newly added lines start unchecked. Duplicate lines retain their checked states in order. Checking notes does not complete the parent work item.
+## Main heading dropdown
+Each main heading has its own arrow: ▾ when open and ▸ when closed. Click the arrow to open or close only that main heading. The title and counts stay visible. All its subheadings and work items stay stored. Other headings are unaffected. Open/closed settings persist after refresh.
 
-## Hide or show a main heading's contents
-Select Hide contents on a main heading to collapse all its subheadings, checklist items and notes. The main heading title and counts stay visible. Select Show contents to expand it again. This setting is saved per heading and restored on refresh. Hidden content is not deleted and remains available in records, Today, backups and exports. Archived headings support this control too.
+## Compatibility and verification
+JSON backup format remains version 4, with support for older backups. Existing saved data is preserved. Excel now labels the column Checklist and includes [x]/[ ] states.
 
-## Data and verification
-JSON backups now use version 4 and preserve notes checkmarks and heading collapse settings. Older backup versions 1–3 still load. Older app versions cannot restore version 4 backups. Excel notes use [x] and [ ] to preserve completion information.
-
-Automated simulations passed: legacy data conversion; note toggling independently of task completion; persistence after reload; editing notes in the task dialog; reordered/duplicate lines; backup restoration; Excel checkmark output; main heading hide/show and persistence; quick-add, task completion, duplication, Today grouping, all view renderers, and subheading export.
-
-Live browser visual, mobile and keyboard checks remain unverified because the browser could not launch in this environment.
+Automated simulations passed for adding, editing, removing and checking checklist rows, preserving checks when editing, quick-add, reload persistence, backups, Excel output, individual heading dropdowns, legacy data migration and existing view rendering. Live browser appearance and mobile interaction remain unverified because Chromium cannot launch in this environment.
