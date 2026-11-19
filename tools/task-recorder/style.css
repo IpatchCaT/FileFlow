@@ -390,3 +390,18 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   .subheading-header { padding: 9px; gap: 7px; }
   .subheading-section .task { margin-left: 0; }
 }
+
+.note-checklist { list-style: none; padding: 0; margin: 10px 0; }
+.note-checklist li { margin: 5px 0; }
+.note-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; background: #f5f8f5; border: 1px solid #d9e5dc; border-radius: 7px; cursor: pointer; }
+.note-item input[type="checkbox"] { flex: 0 0 18px; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #427253; }
+.note-item-text { overflow-wrap: anywhere; min-width: 0; color: #294832; }
+.note-item.checked .note-item-text { text-decoration: line-through; color: #68796d; }
+.task.done .note-item-text { text-decoration: none; }
+.task.done .note-item.checked .note-item-text { text-decoration: line-through; }
+.note-editor { min-width: 0; }
+.heading-collapse { flex-shrink: 0; font-size: .78rem; padding: 7px 10px; background: #fff; color: #315d40; border: 1px solid #b6ccbc; border-radius: 7px; }
+.heading-collapse:hover { background: #f0f7f1; border-color: #568365; }
+.heading-body[hidden] { display: none; }
+.heading-card .card-header { flex-wrap: wrap; }
+.heading-card .card-header > div:first-child { flex: 1; min-width: 140px; }

@@ -90,7 +90,7 @@ function downloadFile(blob, filename) {
 
 function parseBackup(text) {
   const backup = JSON.parse(text);
-  if (backup?.format !== "fileflow-task-recorder" || ![1, 2, 3].includes(backup.version)) {
+  if (backup?.format !== "fileflow-task-recorder" || ![1, 2, 3, 4].includes(backup.version)) {
     throw new Error("Invalid backup format");
   }
   return normalizeHeadings(backup.headings);
@@ -112,7 +112,7 @@ function normalizeHeadings(data) {
   const optionalDay = value => value === undefined || value === "" || validDay(value);
   const optionalFlag = value => value === undefined || typeof value === "boolean";
   return data.map(heading => {
-    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks) || !optionalFlag(heading.archived) ||
+    if (!heading || !validId(heading.id) || !validText(heading.name) || !Array.isArray(heading.tasks) || !optionalFlag(heading.archived) || !optionalFlag(heading.collapsed) ||
         !optionalText(heading.notes, noteLimit)) {
       throw new Error("Invalid heading");
     }
@@ -127,15 +127,16 @@ function normalizeHeadings(data) {
       if (!task || !validId(task.id) || !validText(task.text) || !validDate(task.added) ||
           (task.completed !== null && !validDate(task.completed)) || !optionalFlag(task.waiting) ||
           !optionalDay(task.due) || !optionalDay(task.followUp) || !optionalText(task.waitingFor, 300) ||
-          !optionalText(task.notes, 4000) || !optionalText(task.link, 2000) ||
+          !optionalText(task.notes, 4000) ||
+          (task.noteChecks !== undefined && (!Array.isArray(task.noteChecks) || task.noteChecks.length !== noteLines(task.notes).length || task.noteChecks.some(value => typeof value !== "boolean"))) || !optionalText(task.link, 2000) ||
           (task.link && !webLink(task.link))) throw new Error("Invalid task");
       return {
         id: task.id, subheadingId, text: task.text, added: task.added, completed: task.completed,
         due: task.due ?? "", followUp: task.followUp ?? "", waiting: Boolean(task.waiting),
-        waitingFor: task.waitingFor ?? "", notes: task.notes ?? "", link: task.link ?? ""
+        waitingFor: task.waitingFor ?? "", notes: task.notes ?? "", noteChecks: noteLines(task.notes).map((_, i) => task.noteChecks?.[i] ?? false), link: task.link ?? ""
       };
     });
-    return { id: heading.id, name: heading.name, archived: Boolean(heading.archived), notes: heading.notes ?? "", subheadings: subheadings.map(({id, name}) => ({id, name})), tasks };
+    return { id: heading.id, name: heading.name, collapsed: Boolean(heading.collapsed), archived: Boolean(heading.archived), notes: heading.notes ?? "", subheadings: subheadings.map(({id, name}) => ({id, name})), tasks };
   });
 }
 
@@ -504,45 +505,88 @@ function taskList(heading, siblings) {
   return list;
 }
 
+function noteLines(text = "") {
+  return text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+
+function reconcileNoteChecks(previous, checks, next) {
+  const queues = new Map();
+  noteLines(previous).forEach((line, i) => {
+    if (!queues.has(line)) queues.set(line, []);
+    queues.get(line).push(Boolean(checks?.[i]));
+  });
+  return noteLines(next).map(line => queues.get(line)?.shift() ?? false);
+}
+
+function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
+  const panel = element("div", "note-editor");
+  const input = element("textarea", "heading-note-input");
+  input.value = initialText;
+  input.rows = 4;
+  input.maxLength = noteLimit;
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.setAttribute("aria-label", label);
+  input.placeholder = "Write one checklist item per line…";
+  let previous = input.value;
+  let checks = reconcileNoteChecks(record.notes, record.noteChecks, input.value);
+  const list = element("ul", "note-checklist");
+  function draw() {
+    list.replaceChildren();
+    noteLines(input.value).forEach((text, index) => {
+      const item = element("li");
+      const label = element("label", checks[index] ? "note-item checked" : "note-item");
+      const checkbox = element("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = checks[index];
+      checkbox.id = `note-check-${record.id}-${index}`;
+      checkbox.addEventListener("change", () => {
+        checks[index] = checkbox.checked;
+        label.className = checks[index] ? "note-item checked" : "note-item";
+        if (onCheck) onCheck(input.value, [...checks], checkbox.id);
+      });
+      label.append(checkbox, element("span", "note-item-text", text));
+      item.append(label);
+      list.append(item);
+    });
+  }
+  input.addEventListener("input", () => {
+    checks = reconcileNoteChecks(previous, checks, input.value);
+    previous = input.value;
+    draw();
+  });
+  panel.append(list, element("p", "small", "One item per line. Tick each item when finished."), input);
+  draw();
+  return { panel, input, getChecks: () => [...checks] };
+}
+
 function notesPanel(record, kind, name) {
   const key = `${kind}-${record.id}`;
   const panel = element("details", "heading-notes");
   const summary = element("summary", "heading-notes-summary");
-  summary.append(element("span", "", `${kind} notes`));
-  if (record.notes?.trim()) {
-    summary.append(element("span", "heading-note-preview", record.notes.trim().replace(/\s+/g, " ")));
-  }
+  const count = noteLines(record.notes).length;
+  const done = (record.noteChecks ?? []).filter(Boolean).length;
+  summary.append(element("span", "", count ? `${kind} notes · ${done}/${count} done` : `${kind} notes`));
+  if (record.notes?.trim()) summary.append(element("span", "heading-note-preview", record.notes.trim().replace(/\s+/g, " ")));
   panel.open = openNotePanels.has(key);
   panel.addEventListener("toggle", () => {
     if (!panel.isConnected) return;
     if (panel.open) openNotePanels.add(key);
     else openNotePanels.delete(key);
   });
-
-  const input = element("textarea", "heading-note-input");
-  input.id = `notes-${key}`;
-  input.setAttribute("aria-label", `${kind} notes for ${name}`);
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.rows = 4;
-  input.maxLength = noteLimit;
-  input.placeholder = `Add notes about this ${kind.toLowerCase()}…`;
-  const saved = record.notes ?? "";
-  input.value = noteDrafts.get(key) ?? saved;
-  const saveNote = button("Save notes", () => {
-    record.notes = input.value;
+  function commit(text, checks, focusId) {
+    record.notes = text;
+    record.noteChecks = checks;
     noteDrafts.delete(key);
     openNotePanels.add(key);
-    save(`${kind} notes saved.`);
-    byId(input.id)?.focus();
-  });
-  saveNote.disabled = input.value === saved;
-  input.addEventListener("input", () => {
-    saveNote.disabled = input.value === saved;
-    if (saveNote.disabled) noteDrafts.delete(key);
-    else noteDrafts.set(key, input.value);
-  });
-  panel.append(summary, input, saveNote);
+    save("Notes checklist saved.");
+    byId(focusId)?.focus();
+  }
+  const editor = noteEditor(record, `Notes checklist for ${name}`, noteDrafts.get(key) ?? record.notes ?? "", commit);
+  editor.input.id = `notes-${key}`;
+  const saveNote = button("Save notes", () => commit(editor.input.value, editor.getChecks(), editor.input.id));
+  editor.input.addEventListener("input", () => noteDrafts.set(key, editor.input.value));
+  panel.append(summary, editor.panel, element("p", "small", "Save notes after editing. Ticking an item saves the current list automatically."), saveNote);
   return panel;
 }
 
@@ -573,14 +617,30 @@ function headingCard(heading) {
     }],
     ["Delete heading", () => removeHeading(heading)]
   ]));
+  const contentsId = `heading-contents-${heading.id}`;
+  const toggle = button(heading.collapsed ? "Show contents" : "Hide contents", () => {
+    heading.collapsed = !heading.collapsed;
+    save();
+    byId(`heading-toggle-${heading.id}`)?.focus();
+  }, "heading-collapse");
+  toggle.id = `heading-toggle-${heading.id}`;
+  toggle.setAttribute("aria-expanded", String(!heading.collapsed));
+  toggle.setAttribute("aria-controls", contentsId);
+  toggle.setAttribute("aria-label", `${heading.collapsed ? "Show" : "Hide"} contents of ${heading.name}`);
+  header.append(toggle);
   card.append(header);
+  const body = element("div", "heading-body");
+  body.id = contentsId;
+  body.hidden = Boolean(heading.collapsed);
+  card.append(body);
+  if (heading.collapsed) return card;
   if (heading.tasks.length) {
     const progress = element("progress", "heading-progress");
     progress.max = heading.tasks.length;
     progress.value = completed.length;
     const label = element("label", "progress-label", `${completed.length} of ${heading.tasks.length} completed`);
     label.append(progress);
-    card.append(label);
+    body.append(label);
   }
   for (const group of heading.subheadings) {
     const section = element("section", "subheading-section");
@@ -600,9 +660,9 @@ function headingCard(heading) {
     const list = taskList(heading, items);
     section.append(list.children.length ? list : element("p", "small", items.length ? "No matching work items." : "Add your first work item below."));
     if (!heading.archived) section.append(quickAdd(heading, group));
-    card.append(section);
+    body.append(section);
   }
-  if (!heading.archived) card.append(button("+ Add subheading", () => {
+  if (!heading.archived) body.append(button("+ Add subheading", () => {
     textDialog("Add subheading", "Subheading name", "", "Add subheading", name => {
       heading.subheadings.push({ id: crypto.randomUUID(), name });
       save("Subheading added.");
@@ -635,7 +695,7 @@ function quickAdd(heading, group) {
   quickInput.spellcheck = false;
   quickInput.rows = 3;
   quickInput.maxLength = noteLimit;
-  quickInput.placeholder = "Add notes for this new task…";
+  quickInput.placeholder = "One note checklist item per line…";
   quickInput.value = noteDrafts.get(noteKey) ?? "";
   quickInput.addEventListener("input", () => noteDrafts.set(noteKey, quickInput.value));
   quickNotes.addEventListener("toggle", () => {
@@ -651,6 +711,7 @@ function quickAdd(heading, group) {
     if (!text) return;
     const task = newTask(text);
     task.notes = quickInput.value;
+    task.noteChecks = noteLines(task.notes).map(() => false);
     task.subheadingId = group.id;
     heading.tasks.push(task);
     drafts.delete(draftKey);
@@ -912,9 +973,9 @@ function editTask(task, creating = false) {
   const due = field("Due date", element("input"), task.due, "date");
   const waitingFor = field("Waiting for", element("input"), task.waitingFor, "text", 300);
   const followUp = field("Follow-up date", element("input"), task.followUp, "date");
-  const notes = field("Task notes", element("textarea"), task.notes, undefined, 4000);
-  notes.rows = 5;
-  notes.placeholder = "Add details about this task…";
+  const notesEditor = noteEditor(task, "Task notes — one item per line");
+  panel.append(element("strong", "", "Task notes checklist"), notesEditor.panel);
+  const notes = notesEditor.input;
   const link = field("Reference link", element("input"), task.link, "url", 2000);
   function showWaitingFields() {
     waitingFor.parentElement.hidden = followUp.parentElement.hidden = statusSelect.value !== "Waiting";
@@ -942,7 +1003,7 @@ function editTask(task, creating = false) {
     Object.assign(task, {
       text, subheadingId: subgroup.value, due: due.value, waiting: statusSelect.value === "Waiting",
       completed: statusSelect.value === "Completed" ? task.completed || new Date().toISOString() : null,
-      waitingFor: waitingFor.value.trim(), followUp: followUp.value, notes: notes.value, link: reference
+      waitingFor: waitingFor.value.trim(), followUp: followUp.value, notes: notes.value, noteChecks: notesEditor.getChecks(), link: reference
     });
     if (creating) {
       heading.tasks.push(task);
@@ -1264,7 +1325,7 @@ byId("export").addEventListener("click", () => {
 });
 
 function downloadBackup() {
-  const data = JSON.stringify({ format: "fileflow-task-recorder", version: 3, headings }, null, 2);
+  const data = JSON.stringify({ format: "fileflow-task-recorder", version: 4, headings }, null, 2);
   downloadFile(new Blob([data], { type: "application/json" }), "task-recorder-backup.json");
 }
 
