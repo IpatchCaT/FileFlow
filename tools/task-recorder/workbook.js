@@ -2,6 +2,7 @@
 
 const recordFields = [
   { label: "Heading", value: task => task.heading, width: 27 },
+  { label: "Subheading", value: task => task.subheading, width: 27 },
   { label: "Task", value: task => task.text, width: 50 },
   { label: "Status", value: task => taskStatus(task), width: 16 },
   { label: "Date Added", value: task => task.added, type: "timestamp" },

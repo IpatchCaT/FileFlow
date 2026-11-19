@@ -90,7 +90,7 @@ function downloadFile(blob, filename) {
 
 function parseBackup(text) {
   const backup = JSON.parse(text);
-  if (backup?.format !== "fileflow-task-recorder" || ![1, 2].includes(backup.version)) {
+  if (backup?.format !== "fileflow-task-recorder" || ![1, 2, 3].includes(backup.version)) {
     throw new Error("Invalid backup format");
   }
   return normalizeHeadings(backup.headings);
@@ -116,19 +116,26 @@ function normalizeHeadings(data) {
         !optionalText(heading.notes, noteLimit)) {
       throw new Error("Invalid heading");
     }
+    const subheadings = heading.subheadings === undefined
+      ? [{ id: crypto.randomUUID(), name: "General" }]
+      : heading.subheadings;
+    if (!Array.isArray(subheadings) || !subheadings.length || subheadings.some(group =>
+      !group || !validId(group.id) || !validText(group.name))) throw new Error("Invalid subheading");
     const tasks = heading.tasks.map(task => {
+      const subheadingId = task.subheadingId ?? subheadings[0].id;
+      if (!subheadings.some(group => group.id === subheadingId)) throw new Error("Invalid task subheading");
       if (!task || !validId(task.id) || !validText(task.text) || !validDate(task.added) ||
           (task.completed !== null && !validDate(task.completed)) || !optionalFlag(task.waiting) ||
           !optionalDay(task.due) || !optionalDay(task.followUp) || !optionalText(task.waitingFor, 300) ||
           !optionalText(task.notes, 4000) || !optionalText(task.link, 2000) ||
           (task.link && !webLink(task.link))) throw new Error("Invalid task");
       return {
-        id: task.id, text: task.text, added: task.added, completed: task.completed,
+        id: task.id, subheadingId, text: task.text, added: task.added, completed: task.completed,
         due: task.due ?? "", followUp: task.followUp ?? "", waiting: Boolean(task.waiting),
         waitingFor: task.waitingFor ?? "", notes: task.notes ?? "", link: task.link ?? ""
       };
     });
-    return { id: heading.id, name: heading.name, archived: Boolean(heading.archived), notes: heading.notes ?? "", tasks };
+    return { id: heading.id, name: heading.name, archived: Boolean(heading.archived), notes: heading.notes ?? "", subheadings: subheadings.map(({id, name}) => ({id, name})), tasks };
   });
 }
 
@@ -210,7 +217,7 @@ function textDialog(title, label, value, confirm, action) {
 
 function newHeading() {
   textDialog("New heading", "Heading name", "", "Create heading", name => {
-    headings.push({ id: crypto.randomUUID(), name, tasks: [] });
+    headings.push({ id: crypto.randomUUID(), name, subheadings: [{ id: crypto.randomUUID(), name: "General" }], tasks: [] });
     headingFilter.value = "";
     search.value = "";
     view = "dashboard";
@@ -250,7 +257,7 @@ function removeHeading(heading) {
     undoDeletion = () => headings.splice(index, 0, heading);
     expanded.delete(heading.id);
     drafts.delete(heading.id);
-    for (const key of [`Heading-${heading.id}`, `Quick-${heading.id}`, ...heading.tasks.map(task => `Task-${task.id}`)]) {
+    for (const key of [`Heading-${heading.id}`, ...heading.subheadings.map(group => `Quick-${heading.id}-${group.id}`), ...heading.tasks.map(task => `Task-${task.id}`)]) {
       noteDrafts.delete(key);
       openNotePanels.delete(key);
     }
@@ -271,6 +278,7 @@ function moveTask(heading, task) {
   openDialog("Move task", field, "Move task", data => {
     const destination = headings.find(item => item.id === data.get("destination"));
     if (!destination) return false;
+    task.subheadingId = destination.subheadings[0].id;
     destination.tasks.push(task);
     heading.tasks = heading.tasks.filter(item => item !== task);
     save(`Task moved to ${destination.name}.`);
@@ -279,7 +287,9 @@ function moveTask(heading, task) {
 
 function matches(task) {
   const query = search.value.trim().toLocaleLowerCase();
-  return [task.text, task.notes, task.link, task.waitingFor].some(value => value?.toLocaleLowerCase().includes(query));
+  const owner = headings.find(heading => heading.tasks.some(item => item.id === task.id));
+  const groupName = task.subheading || owner?.subheadings.find(group => group.id === task.subheadingId)?.name;
+  return [task.text, task.notes, task.link, task.waitingFor, groupName].some(value => value?.toLocaleLowerCase().includes(query));
 }
 
 function calendarTimestamp(date) {
@@ -354,7 +364,7 @@ function openCalendar(heading, task) {
   const reminderHint = element("p", "small");
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const title = `Due · ${task.text}`;
-  const details = `Heading: ${heading.name}\nOriginal due date: ${task.due}`;
+  const details = `Heading: ${heading.name}\nSubheading: ${heading.subheadings.find(group => group.id === task.subheadingId)?.name ?? ""}\nOriginal due date: ${task.due}`;
   panel.append(
     element("strong", "", task.text),
     element("p", "small", `${heading.name} · Due ${displayDay(task.due)}`),
@@ -435,7 +445,7 @@ function taskRow(heading, task, siblings, showHeading = false) {
   const copy = element("span", "task-copy");
   copy.append(element("span", "task-text", task.text));
   const metadata = [];
-  if (showHeading) metadata.push(heading.name);
+  if (showHeading) metadata.push(heading.name, heading.subheadings.find(group => group.id === task.subheadingId)?.name);
   if (task.waiting && !task.completed) metadata.push(task.waitingFor ? `Waiting for ${task.waitingFor}` : "Waiting");
   if (task.due) metadata.push(`${!task.completed && task.due < calendarDay() ? "Overdue" : "Due"} ${displayDay(task.due)}`);
   if (task.waiting && task.followUp && !task.completed) metadata.push(`Follow-up ${displayDay(task.followUp)}`);
@@ -572,38 +582,51 @@ function headingCard(heading) {
     label.append(progress);
     card.append(label);
   }
-  const pendingList = taskList(heading, pending);
-  card.append(pendingList.children.length ? pendingList : element("p", "small", pending.length ? "No matching pending tasks." : "No pending tasks."));
-  const visibleDone = completed.filter(matches);
-  if (visibleDone.length) {
-    const done = element("details", "complete");
-    const searching = Boolean(search.value.trim());
-    done.open = expanded.has(heading.id) || searching;
-    done.addEventListener("toggle", () => {
-      if (searching || !done.isConnected) return;
-      if (done.open) expanded.add(heading.id);
-      else expanded.delete(heading.id);
-    });
-    done.append(element("summary", "", `Completed (${visibleDone.length})`), taskList(heading, completed));
-    card.append(done);
+  for (const group of heading.subheadings) {
+    const section = element("section", "subheading-section");
+    const groupHeader = element("div", "subheading-header");
+    const items = heading.tasks.filter(task => task.subheadingId === group.id);
+    const groupTitle = element("h3", "", group.name);
+    groupTitle.id = `subheading-${group.id}`;
+    section.setAttribute("aria-labelledby", groupTitle.id);
+    groupHeader.append(groupTitle, element("span", "subheading-count", `${items.filter(task => task.completed).length}/${items.length}`));
+    if (!heading.archived) groupHeader.append(menu(`Actions for subheading ${group.name}`, [
+      ["Rename subheading", () => textDialog("Rename subheading", "Subheading name", group.name, "Save changes", name => { group.name = name; save(); })],
+      ["Move up", () => reorder(heading.subheadings, group, -1), heading.subheadings.indexOf(group) === 0],
+      ["Move down", () => reorder(heading.subheadings, group, 1), heading.subheadings.indexOf(group) === heading.subheadings.length - 1],
+      ["Delete empty subheading", () => { heading.subheadings = heading.subheadings.filter(item => item !== group); save(); }, items.length > 0 || heading.subheadings.length === 1]
+    ]));
+    section.append(groupHeader);
+    const list = taskList(heading, items);
+    section.append(list.children.length ? list : element("p", "small", items.length ? "No matching work items." : "Add your first work item below."));
+    if (!heading.archived) section.append(quickAdd(heading, group));
+    card.append(section);
   }
+  if (!heading.archived) card.append(button("+ Add subheading", () => {
+    textDialog("Add subheading", "Subheading name", "", "Add subheading", name => {
+      heading.subheadings.push({ id: crypto.randomUUID(), name });
+      save("Subheading added.");
+    });
+  }, "add-subheading"));
+  return card;
+}
 
-  if (heading.archived) return card;
-
+function quickAdd(heading, group) {
+  const draftKey = `${heading.id}-${group.id}`;
   const add = element("form", "add");
   add.autocomplete = "off";
   const input = element("input");
   input.autocomplete = "off";
   input.spellcheck = false;
-  input.placeholder = "Add task…";
-  input.setAttribute("aria-label", `Add task to ${heading.name}`);
-  input.id = `add-${heading.id}`;
+  input.placeholder = "Add work item…";
+  input.setAttribute("aria-label", `Add work item to ${heading.name}, ${group.name}`);
+  input.id = `add-${draftKey}`;
   input.maxLength = 300;
   input.required = true;
-  input.value = drafts.get(heading.id) ?? "";
-  input.addEventListener("input", () => drafts.set(heading.id, input.value));
+  input.value = drafts.get(draftKey) ?? "";
+  input.addEventListener("input", () => drafts.set(draftKey, input.value));
   const submit = element("button", "", "Add");
-  const noteKey = `Quick-${heading.id}`;
+  const noteKey = `Quick-${draftKey}`;
   const quickNotes = element("details", "heading-notes quick-notes");
   quickNotes.open = openNotePanels.has(noteKey);
   const quickInput = element("textarea", "heading-note-input");
@@ -628,19 +651,19 @@ function headingCard(heading) {
     if (!text) return;
     const task = newTask(text);
     task.notes = quickInput.value;
+    task.subheadingId = group.id;
     heading.tasks.push(task);
-    drafts.delete(heading.id);
+    drafts.delete(draftKey);
     noteDrafts.delete(noteKey);
     openNotePanels.delete(noteKey);
     save(matches(task) ? "" : "Task added. Clear search to see it.");
     byId(input.id)?.focus();
   });
-  card.append(add);
-  return card;
+  return add;
 }
 
 function allRecords() {
-  return headings.flatMap(heading => heading.tasks.map(task => ({ ...task, heading: heading.name, headingId: heading.id, archived: Boolean(heading.archived) })));
+  return headings.flatMap(heading => heading.tasks.map(task => ({ ...task, heading: heading.name, subheading: heading.subheadings.find(group => group.id === task.subheadingId)?.name ?? "", headingId: heading.id, archived: Boolean(heading.archived) })));
 }
 
 function filteredRecords(records, includeStatus = true) {
@@ -656,6 +679,8 @@ function filteredRecords(records, includeStatus = true) {
     if (field === "heading") {
       const byHeading = headingNameOrder.compare(a.heading, b.heading) || a.headingId.localeCompare(b.headingId);
       if (byHeading) return direction === "asc" ? byHeading : -byHeading;
+      const bySubheading = headingNameOrder.compare(a.subheading ?? "", b.subheading ?? "") || (a.subheadingId ?? "").localeCompare(b.subheadingId ?? "");
+      if (bySubheading) return bySubheading;
       return (b.completed || "").localeCompare(a.completed || "") || b.added.localeCompare(a.added);
     }
     if (!a[date]) return b[date] ? 1 : 0;
@@ -836,9 +861,11 @@ function newTask(text) {
 
 function duplicateHeading(heading) {
   textDialog("Duplicate heading", "New heading name", `${heading.name.slice(0, 293)} (copy)`, "Duplicate heading", name => {
+    const groupMap = new Map(heading.subheadings.map(group => [group.id, crypto.randomUUID()]));
     headings.push({
-      id: crypto.randomUUID(), name, archived: false,
-      tasks: heading.tasks.map(task => ({ ...newTask(task.text), notes: task.notes ?? "", link: task.link ?? "" }))
+      id: crypto.randomUUID(), name, archived: false, notes: heading.notes ?? "",
+      subheadings: heading.subheadings.map(group => ({ id: groupMap.get(group.id), name: group.name })),
+      tasks: heading.tasks.map(task => ({ ...newTask(task.text), subheadingId: groupMap.get(task.subheadingId), notes: task.notes ?? "", link: task.link ?? "" }))
     });
     headingFilter.value = "";
     search.value = "";
@@ -867,7 +894,17 @@ function editTask(task, creating = false) {
     field("Heading", destination, headingFilter.value || destination.options[0].value);
     if (!destination.value) destination.selectedIndex = 0;
   }
-  const title = field("Task name", element("input"), task.text, "text", 300);
+  const owner = headings.find(heading => heading.tasks.includes(task));
+  const subgroup = element("select");
+  field("Subheading", subgroup, "");
+  function fillSubheadings() {
+    const heading = creating ? headings.find(item => item.id === destination.value) : owner;
+    subgroup.replaceChildren(...(heading?.subheadings ?? []).map(group => new Option(group.name, group.id)));
+    if (heading?.subheadings.some(group => group.id === task.subheadingId)) subgroup.value = task.subheadingId;
+  }
+  fillSubheadings();
+  destination.addEventListener("change", fillSubheadings);
+  const title = field("Work item", element("input"), task.text, "text", 300);
   title.required = true;
   const statusSelect = element("select");
   for (const status of ["Pending", "Waiting", "Completed"]) statusSelect.add(new Option(status));
@@ -903,7 +940,7 @@ function editTask(task, creating = false) {
     if (creating && !heading) return false;
     noteDrafts.delete(`Task-${task.id}`);
     Object.assign(task, {
-      text, due: due.value, waiting: statusSelect.value === "Waiting",
+      text, subheadingId: subgroup.value, due: due.value, waiting: statusSelect.value === "Waiting",
       completed: statusSelect.value === "Completed" ? task.completed || new Date().toISOString() : null,
       waitingFor: waitingFor.value.trim(), followUp: followUp.value, notes: notes.value, link: reference
     });
@@ -1032,7 +1069,7 @@ function weeklyView(records) {
         const date = task.completed ? localDate.format(new Date(task.completed)) :
           task.waiting && task.followUp ? `Follow-up ${displayDay(task.followUp)}` :
           task.due ? `Due ${displayDay(task.due)}` : "";
-        const description = [task.text, task.waiting && task.waitingFor ? `Waiting for ${task.waitingFor}` : "", date].filter(Boolean).join(" · ");
+        const description = [task.subheading, task.text, task.waiting && task.waitingFor ? `Waiting for ${task.waitingFor}` : "", date].filter(Boolean).join(" · ");
         list.append(element("li", "", description));
         lines.push(`• ${description}`);
         exportRows.push({ ...task, summaryGroup: group.title, weekStart: week.start, weekEnd: week.end });
@@ -1157,7 +1194,7 @@ byId("export").addEventListener("click", () => {
     checkbox.value = task.id;
     const label = element("label", "export-task-option");
     const text = element("span");
-    text.append(element("strong", "", task.text), element("small", "", `${task.heading} · ${taskStatus(task)}`));
+    text.append(element("strong", "", task.text), element("small", "", `${task.heading} · ${task.subheading} · ${taskStatus(task)}`));
     label.append(checkbox, text);
     list.append(label);
     return checkbox;
@@ -1227,7 +1264,7 @@ byId("export").addEventListener("click", () => {
 });
 
 function downloadBackup() {
-  const data = JSON.stringify({ format: "fileflow-task-recorder", version: 2, headings }, null, 2);
+  const data = JSON.stringify({ format: "fileflow-task-recorder", version: 3, headings }, null, 2);
   downloadFile(new Blob([data], { type: "application/json" }), "task-recorder-backup.json");
 }
 
@@ -1253,7 +1290,7 @@ byId("clear-data").addEventListener("click", () => {
   const error = element("p", "small");
   error.setAttribute("role", "alert");
   panel.append(
-    element("p", "", "Delete all headings, tasks, and notes saved in this browser, including archived headings? Download a backup first if you want to restore them later."),
+    element("p", "", "Delete all headings, subheadings, tasks, and notes saved in this browser, including archived headings? Download a backup first if you want to restore them later."),
     button("Download backup", downloadBackup),
     error
   );
@@ -1313,7 +1350,7 @@ window.addEventListener("storage", event => {
     headings = normalizeHeadings(JSON.parse(event.newValue ?? "[]"));
     if (event.newValue === null) resetWorkspace();
     const noteKeys = new Set(headings.flatMap(heading => [
-      `Heading-${heading.id}`, `Quick-${heading.id}`, ...heading.tasks.map(task => `Task-${task.id}`)
+      `Heading-${heading.id}`, ...heading.subheadings.map(group => `Quick-${heading.id}-${group.id}`), ...heading.tasks.map(task => `Task-${task.id}`)
     ]));
     for (const key of noteDrafts.keys()) {
       if (!noteKeys.has(key)) noteDrafts.delete(key);
@@ -1342,7 +1379,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 const controlHelp = {
-  new: ["New heading", "Create a heading to group related tasks."],
+  new: ["New heading", "Create the main work title, then add highlighted subheadings and checklist items."],
   "new-task": ["New task", "Add a task with a due date, status, or notes."],
   today: ["Today", "See overdue tasks, tasks due today, and follow-ups that need attention."],
   records: ["Records", "Search and filter your task history."],

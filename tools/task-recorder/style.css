@@ -374,3 +374,19 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   .workspace-sidebar { margin-top: 1rem; }
   .heading-shortcuts { max-height: 10rem; }
 }
+
+/* Three-level work hierarchy: title, highlighted subheading, checklist. */
+.subheading-section { margin-top: 18px; min-width: 0; }
+.subheading-header { display: flex; align-items: center; gap: 10px; background: #edf5ee; border: 1px solid #cbded0; border-left: 4px solid #568365; border-radius: 8px; padding: 10px 12px; }
+.subheading-header h3 { flex: 1; min-width: 0; margin: 0; color: #284e36; font-size: 1rem; overflow-wrap: anywhere; }
+.subheading-count { color: #496752; font-size: .8rem; white-space: nowrap; }
+.subheading-section > ul { margin: 8px 0; padding: 0; list-style: none; }
+.subheading-section .task { margin-left: 8px; }
+.subheading-section .task input[type="checkbox"] { width: 19px; height: 19px; accent-color: #427253; flex-shrink: 0; cursor: pointer; }
+.add-subheading { margin-top: 18px; width: 100%; color: #315d40; border: 1px dashed #8fad98; background: #f5f9f5; }
+.add-subheading:hover { background: #eaf3eb; border-color: #477555; }
+.subheading-section .add { margin-top: 10px; }
+@media (max-width: 560px) {
+  .subheading-header { padding: 9px; gap: 7px; }
+  .subheading-section .task { margin-left: 0; }
+}
