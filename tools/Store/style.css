@@ -1,0 +1,34 @@
+:root {
+  font: 16px/1.5 system-ui, sans-serif;
+  color: #1d3027;
+  background: #f5f6ef;
+  --green: #1c533b;
+  --line: #dce2d7;
+  --muted: #52665b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { background: #172c24; padding: .9rem max(1rem, calc((100% - 920px) / 2)); }
+header a { color: #e8f3d2; font-weight: 750; text-decoration: none; }
+main { width: min(920px, calc(100% - 2rem)); margin: 2.5rem auto; }
+h1 { margin: 0; font-size: clamp(2rem, 6vw, 3.25rem); letter-spacing: -.045em; }
+h2 { margin: 0 0 .85rem; font-size: 1.15rem; }
+p { color: var(--muted); margin: .35rem 0; }
+section { margin-top: 1rem; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--line); border-radius: 15px; background: white; }
+.controls { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; margin: .7rem 0; }
+button, input, select, .file-label { font: inherit; color: inherit; background: white; border: 1px solid var(--line); border-radius: 9px; padding: .55rem .8rem; max-width: 100%; }
+button, .file-label { cursor: pointer; }
+button:hover:not(:disabled), .file-label:hover { background: #eaf0e7; }
+button:disabled { opacity: .55; cursor: default; }
+.primary, .primary:hover:not(:disabled) { background: var(--green); color: white; font-weight: 650; }
+:focus-visible, #drop:focus-within .file-label { outline: 3px solid #ad7634; outline-offset: 3px; }
+#drop { text-align: center; background: #f6f8f2; border: 1px dashed #829685; border-radius: 12px; padding: 1.3rem .6rem; }
+#drop.over { background: #e0ebd9; }
+#files { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file-label { display: inline-block; margin-top: .6rem; }
+#queue { padding: 0; list-style: none; }
+#queue li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .8rem; align-items: center; padding: .7rem 0; border-bottom: 1px solid var(--line); }
+#queue strong, #account { overflow-wrap: anywhere; }
+#queue small { grid-column: 1; color: var(--muted); }
+#queue progress { grid-column: 1 / -1; width: 100%; accent-color: var(--green); }
+#queue a { color: var(--green); }

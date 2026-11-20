@@ -1,117 +1,28 @@
-# Drive Uploader
+# FileFlow Drive Uploader
 
-A small web page that uploads files straight into a folder in your own Google Drive. It runs as a free Google Apps Script web app, so you can open one link from any device, pick or drag a file, and it is saved to Drive.
+## 1. Configure Google Cloud once
 
-**v2 (fast):** the file no longer goes through Apps Script. The script only finds your folder and gives the page a short-lived token, and the browser uploads directly to Google Drive (no base64, real progress bar, 3 files at a time, large files supported).
+1. Open the [Google Cloud console](https://console.cloud.google.com/) and create or select a project. Under **APIs & Services → Library**, enable **Google Drive API**.
+2. In **Google Auth Platform**, set up **Branding** and **Audience**. For a personal Gmail account, choose **External**. While the app is in **Testing**, add your Google account under **Audience → Test users**.
+3. Under **Data Access**, add `https://www.googleapis.com/auth/drive.file`. FileFlow uses this permission to upload files and manage the destinations it creates.
+4. Under **Clients**, create an OAuth client of type **Web application**. Add `https://ipatchcat.github.io` to **Authorized JavaScript origins**. An origin contains only the scheme and host, so leave out `/FileFlow/` and the trailing slash. If Pages uses a custom domain, register its actual HTTPS origin instead. This popup flow needs no redirect URI.
+5. Copy the **Client ID** ending in `.apps.googleusercontent.com` and put it between the quotes in `tools/drive-uploader/config.js`. You can edit the file on GitHub using the pencil button. The client ID is public. Keep the client secret out of GitHub.
 
-## Files
+[Google Identity Services setup](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid) · [Drive upload documentation](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
 
-| File | Purpose |
-|------|---------|
-| `Code.gs` | Backend. Finds or creates the Drive folder and returns an upload token. |
-| `README.md` | This guide. |
+## 2. Upload through GitHub
 
-`Code.gs` is all-in-one: it contains the upload page too, so there is no separate HTML file to create in Apps Script.
+1. Extract the ZIP. In the [FileFlow repository](https://github.com/IpatchCaT/FileFlow), open the root of the branch that GitHub Pages publishes, expected to be `main`.
+2. Click **Add file → Upload files**. Drag the extracted `index.html` and `tools` folder onto the upload area. Check that the upload shows `tools/drive-uploader/index.html` and the other uploader files under the same path. Commit the changes from the web interface.
+3. The ZIP includes a replacement root `index.html` based on FileFlow commit `42c9134`. If your homepage has changed since then, upload only the `tools` folder and add this link inside the homepage's existing navigation instead:
+   `<a class="drive-link" href="tools/drive-uploader/">Drive Uploader</a>`
+4. After Pages redeploys, open [Drive Uploader](https://ipatchcat.github.io/FileFlow/tools/drive-uploader/) or click **Drive Uploader** from FileFlow’s sidebar.
 
-## Full setup guide
+## 3. Send files to Drive
 
-### Before you start
+1. Click **Connect Google Drive** and select the account you added as a test user.
+2. Check the displayed account and choose a destination. FileFlow creates **FileFlow Uploads** in My Drive on first connection. You can create more destinations from the page and switch between them. The limited permission only shows writable folders accessible to this app, so arbitrary existing folders from My Drive may be absent.
+3. Choose or drop files, then click **Upload to Drive**. Check the summary, and use **Open in Drive** to confirm that a successful file is in the selected folder.
+4. If one file fails, click **Retry** on its row. Retry uses the original account and destination. If prompted, reconnect with the same Google account first. Keep the page open during uploads. Closing or refreshing the tab clears the queue.
 
-- A Google account (the one whose Drive will store the files)
-- A GitHub account
-- The files `Code.gs` and `README.md`
-
-### Part 1: Create the Apps Script project
-
-1. Open [script.google.com](https://script.google.com) while signed in to only the Google account you want to use.
-2. Click **New project**.
-3. Rename the project (for example `Drive Uploader`).
-
-### Part 2: Add the code
-
-1. In the left sidebar, click **Code.gs**.
-2. Select all the default code and delete it.
-3. Paste in the full contents of `Code.gs` and press **Ctrl+S**.
-
-That is the only file. Do not create an HTML file.
-
-### Part 3: Approve permissions
-
-This step prevents the "Loading..." hang.
-
-1. In the function dropdown at the top (next to **Run**), choose `getUploadInfo`.
-2. Click **Run**.
-3. Click **Review permissions** and choose your account.
-4. If you see "Google hasn't verified this app", click **Advanced**, then **Go to Drive Uploader (unsafe)**. This is normal for your own script.
-5. Click **Allow**.
-
-A folder named **My Uploads** now exists in your Drive.
-
-### Part 4: Deploy as a web app
-
-1. Click **Deploy -> New deployment**.
-2. Click the gear icon next to "Select type" and choose **Web app**.
-3. Set:
-   - Description: `v1`
-   - Execute as: **Me**
-   - Who has access: **Only myself**
-4. Click **Deploy** and copy the **Web app URL** (it ends in `/exec`).
-
-### Part 5: Test it
-
-1. Open the URL in a new tab. If several Google accounts are signed in, use an Incognito window and sign in with only the right account.
-2. Click **Choose files** and pick a small file.
-3. Wait for **Saved**, then check the **My Uploads** folder in Drive.
-4. Bookmark the page. On a phone, use **Add to Home screen** so it works like an app.
-
-If it hangs, open **Executions** in the Apps Script sidebar to see the error.
-
-### Part 6: Create the GitHub repo
-
-1. Sign in at [github.com](https://github.com) and click **+ -> New repository**.
-2. Name it `drive-uploader`.
-3. Choose **Private** (recommended).
-4. Tick **Add a README file** and click **Create repository**.
-
-### Part 7: Upload the files to GitHub
-
-1. Open the repo and click **Add file -> Upload files**.
-2. Drag in `Code.gs` and `README.md`. The uploaded README replaces the default one.
-3. Write a commit message such as `Add Drive uploader files`.
-4. Select **Commit directly to the main branch** and click **Commit changes**.
-
-### Part 8: Updating later
-
-1. Edit the code in the Apps Script editor and save.
-2. Click **Deploy -> Manage deployments -> Edit (pencil) -> Version: New version -> Deploy**. Without this step the live link keeps running the old code.
-3. To keep GitHub in sync, open the file in the repo, click the pencil icon, paste the new code, and commit.
-
-## Settings
-
-- **Folder name:** change `FOLDER_NAME` at the top of `Code.gs`.
-- **Parallel uploads:** `PARALLEL` in `Code.gs` (inside the page code at the bottom) (default 3) sets how many files upload at once.
-- **Size limit:** none in the page. Uploads go straight to Drive, so the limit is your Drive storage.
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| Page stuck on "Loading..." or "Uploading..." | Run `getUploadInfo` once and approve permissions (Part 3). Try Incognito with a single signed-in account. |
-| "No HTML file named Index" error | You are running an old Code.gs. Replace it with the new all-in-one Code.gs. |
-| Blank page or "google is not defined" | Open the Web app URL ending in `/exec` (starts with script.google.com), not a file on your computer or GitHub. |
-| Changes do not show up | Create a **New version** in Manage deployments (Part 8). |
-| Slow uploads | Speed now depends on your internet upload speed. Use stable Wi-Fi. The status line shows live speed. |
-| "Failed: Start failed (401/403)" | Run `getUploadInfo` in the editor, approve permissions, then redeploy a New version. |
-
-## Checklist
-
-- [ ] `Code.gs` pasted into the Apps Script project (no HTML file)
-- [ ] `getUploadInfo` run once and permissions approved
-- [ ] Deployed as web app, access set to **Only myself**
-- [ ] Test upload appears in **My Uploads** in Drive
-- [ ] GitHub repo created with `Code.gs` and `README.md` committed
-
-## Notes
-
-- Only your Google account can open the page when access is set to **Only myself**.
-- Do not commit passwords or API keys to this repo. The tool does not need any.
+FileFlow sends file data directly to Google Drive. Files inherit the destination’s sharing settings. The tool does not change sharing permissions.
