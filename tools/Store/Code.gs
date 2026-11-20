@@ -1,5 +1,7 @@
-// Drive Uploader - backend (Google Apps Script)
-// Files are saved into a folder in YOUR Google Drive.
+// Drive Uploader v2 (fast) - backend
+// The file bytes no longer pass through Apps Script. This script only finds
+// your folder and hands the page a short-lived token, and the browser then
+// uploads straight to Google Drive.
 
 const FOLDER_NAME = 'My Uploads'; // change to any folder name you like
 
@@ -9,26 +11,23 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function getFolder_() {
-  const it = DriveApp.getFoldersByName(FOLDER_NAME);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER_NAME);
-}
-
-// Called from the page for each file
-function saveFile(name, mimeType, base64) {
-  const bytes = Utilities.base64Decode(base64);
-  const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', name);
-  const file = getFolder_().createFile(blob);
-  return { id: file.getId(), name: file.getName(), url: file.getUrl() };
-}
-
-// Shows the 10 most recent uploads on the page
-function recentFiles() {
-  const files = getFolder_().getFiles();
-  const list = [];
-  while (files.hasNext()) {
-    const f = files.next();
-    list.push({ name: f.getName(), url: f.getUrl(), time: f.getDateCreated().getTime() });
+// Finds (or creates) the upload folder once, then remembers its id.
+function getFolderId_() {
+  const props = PropertiesService.getScriptProperties();
+  const saved = props.getProperty('FOLDER_ID');
+  if (saved) {
+    try {
+      const f = DriveApp.getFolderById(saved);
+      if (!f.isTrashed() && f.getName() === FOLDER_NAME) return saved;
+    } catch (e) {}
   }
-  return list.sort((a, b) => b.time - a.time).slice(0, 10);
+  const it = DriveApp.getFoldersByName(FOLDER_NAME);
+  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER_NAME);
+  props.setProperty('FOLDER_ID', folder.getId());
+  return folder.getId();
+}
+
+// Called by the page. Returns a token (about 1 hour) and the folder id.
+function getUploadInfo() {
+  return { token: ScriptApp.getOAuthToken(), folderId: getFolderId_() };
 }

@@ -2,11 +2,13 @@
 
 A small web page that uploads files straight into a folder in your own Google Drive. It runs as a free Google Apps Script web app, so you can open one link from any device, pick or drag a file, and it is saved to Drive.
 
+**v2 (fast):** the file no longer goes through Apps Script. The script only finds your folder and gives the page a short-lived token, and the browser uploads directly to Google Drive (no base64, real progress bar, 3 files at a time, large files supported).
+
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `Code.gs` | Backend. Saves each uploaded file into a Drive folder and lists recent uploads. |
+| `Code.gs` | Backend. Finds or creates the Drive folder and returns an upload token. |
 | `Index.html` | The upload page (choose files or drag and drop, shows status per file). |
 | `README.md` | This guide. |
 
@@ -44,7 +46,7 @@ The sidebar should show `Code.gs` and `Index.html`.
 
 This step prevents the "Loading..." hang.
 
-1. In the function dropdown at the top (next to **Run**), choose `recentFiles`.
+1. In the function dropdown at the top (next to **Run**), choose `getUploadInfo`.
 2. Click **Run**.
 3. Click **Review permissions** and choose your account.
 4. If you see "Google hasn't verified this app", click **Advanced**, then **Go to Drive Uploader (unsafe)**. This is normal for your own script.
@@ -94,23 +96,24 @@ If it hangs, open **Executions** in the Apps Script sidebar to see the error.
 ## Settings
 
 - **Folder name:** change `FOLDER_NAME` at the top of `Code.gs`.
-- **Size limit:** `MAX_MB` in `Index.html` is 30 MB. Apps Script handles roughly 50 MB per upload, so keep it below that.
+- **Parallel uploads:** `PARALLEL` in `Index.html` (default 3) sets how many files upload at once.
+- **Size limit:** none in the page. Uploads go straight to Drive, so the limit is your Drive storage.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| Page stuck on "Loading..." or "Uploading..." | Run `recentFiles` once and approve permissions (Part 3). Try Incognito with a single signed-in account. |
+| Page stuck on "Loading..." or "Uploading..." | Run `getUploadInfo` once and approve permissions (Part 3). Try Incognito with a single signed-in account. |
 | "File not found: Index" error | Rename the HTML file to exactly `Index`. |
 | Blank page | Check that `Index.html` has only the page code and `Code.gs` only the backend code. |
 | Changes do not show up | Create a **New version** in Manage deployments (Part 8). |
-| "Too big" message | The page limit is 30 MB. Compress or zip the file, or use the Drive site for large files. |
-| Slow uploads | Normal for Apps Script (files are base64 encoded and sent one at a time). Upload fewer or smaller files on stable Wi-Fi. |
+| Slow uploads | Speed now depends on your internet upload speed. Use stable Wi-Fi. The status line shows live speed. |
+| "Failed: Start failed (401/403)" | Run `getUploadInfo` in the editor, approve permissions, then redeploy a New version. |
 
 ## Checklist
 
 - [ ] `Code.gs` and `Index.html` both in the Apps Script project
-- [ ] `recentFiles` run once and permissions approved
+- [ ] `getUploadInfo` run once and permissions approved
 - [ ] Deployed as web app, access set to **Only myself**
 - [ ] Test upload appears in **My Uploads** in Drive
 - [ ] GitHub repo created with the three files committed
