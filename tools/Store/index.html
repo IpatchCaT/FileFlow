@@ -72,9 +72,10 @@
       const reader = new FileReader();
       reader.onload = () => {
         const base64 = reader.result.split(',')[1];
+        const slow = setTimeout(() => { status.textContent = 'Still uploading… (slow)'; }, 20000);
         google.script.run
-          .withSuccessHandler(() => { status.className = 's ok'; status.textContent = 'Saved ✓'; resolve(); })
-          .withFailureHandler(err => { status.className = 's err'; status.textContent = 'Failed'; console.error(err); resolve(); })
+          .withSuccessHandler(() => { clearTimeout(slow); status.className = 's ok'; status.textContent = 'Saved ✓'; resolve(); })
+          .withFailureHandler(err => { clearTimeout(slow); status.className = 's err'; status.textContent = 'Failed'; console.error(err); resolve(); })
           .saveFile(file.name, file.type, base64);
       };
       reader.onerror = () => { status.className = 's err'; status.textContent = 'Read error'; resolve(); };
@@ -94,6 +95,8 @@
         li.appendChild(a);
         ul.appendChild(li);
       });
+    }).withFailureHandler(() => {
+      document.getElementById('recent').innerHTML = '<li class="err">Could not load. Run recentFiles once in the editor and approve permissions.</li>';
     }).recentFiles();
   }
   loadRecent();
