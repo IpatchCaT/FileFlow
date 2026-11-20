@@ -15,3 +15,8 @@ Each main heading has its own arrow: ▾ when open and ▸ when closed. Click th
 JSON backup format remains version 4, with support for older backups. Existing saved data is preserved. Excel now labels the column Checklist and includes [x]/[ ] states.
 
 Automated simulations passed for adding, editing, removing and checking checklist rows, preserving checks when editing, quick-add, reload persistence, backups, Excel output, individual heading dropdowns, legacy data migration and existing view rendering. Live browser appearance and mobile interaction remain unverified because Chromium cannot launch in this environment.
+
+## Expanding text update
+Checklist text now wraps and grows vertically with its content, in task cards, Quick Add and Edit Task. It refits when reopened or when the layout width changes. Enter still adds the next item; pasted line breaks within a single item become spaces to preserve checklist storage compatibility. Replace index.html, app.js and style.css for this update (the ZIP also includes the existing workbook.js and JSZip files).
+
+Automated regression checks and expansion/shrink calculations passed. Live browser layout remains unverified.

@@ -518,6 +518,37 @@ function reconcileNoteChecks(previous, checks, next) {
   return noteLines(next).map(line => queues.get(line)?.shift() ?? false);
 }
 
+function resizeChecklistField(field) {
+  if (!field.isConnected || !field.getClientRects().length) return;
+  field.style.height = "auto";
+  const style = getComputedStyle(field);
+  const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+  field.style.height = `${Math.ceil(field.scrollHeight + borders)}px`;
+}
+
+function resizeChecklistFields() {
+  document.querySelectorAll("textarea.checklist-item-input").forEach(resizeChecklistField);
+}
+
+window.addEventListener("resize", resizeChecklistFields);
+document.addEventListener("toggle", () => requestAnimationFrame(resizeChecklistFields), true);
+// Refit wrapping after responsive columns or dialogs change width.
+if (typeof ResizeObserver !== "undefined") {
+  const widths = new WeakMap();
+  const observer = new ResizeObserver(entries => {
+    let changed = false;
+    for (const entry of entries) {
+      if (widths.get(entry.target) !== entry.contentRect.width) {
+        widths.set(entry.target, entry.contentRect.width);
+        changed = true;
+      }
+    }
+    if (changed) requestAnimationFrame(resizeChecklistFields);
+  });
+  observer.observe(content);
+  observer.observe(dialogBody);
+}
+
 function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
   const panel = element("div", "note-editor");
   // Retain the existing storage format for compatibility with saved records.
@@ -543,8 +574,9 @@ function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
       checkbox.checked = item.checked;
       checkbox.id = `note-check-${record.id}-${index}`;
       checkbox.setAttribute("aria-label", `Complete checklist item ${index + 1}`);
-      const text = element("input", "checklist-item-input");
-      text.type = "text";
+      const text = element("textarea", "checklist-item-input");
+      text.rows = 1;
+      text.wrap = "soft";
       text.value = item.text;
       text.maxLength = noteLimit;
       text.autocomplete = "off";
@@ -553,6 +585,7 @@ function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
       text.setAttribute("aria-label", `${label}, item ${index + 1}`);
       text.addEventListener("input", () => {
         const previous = item.text;
+        text.value = text.value.replace(/[\r\n]+/g, " ");
         item.text = text.value;
         if (nonempty().map(item => item.text.trim()).join("\n").length > noteLimit) {
           item.text = previous;
@@ -561,6 +594,7 @@ function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
           return;
         }
         error.textContent = "";
+        resizeChecklistField(text);
         sync();
       });
       text.addEventListener("keydown", event => {
@@ -585,6 +619,7 @@ function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
       row.append(checkbox, text, remove);
       list.append(row);
     });
+    requestAnimationFrame(resizeChecklistFields);
   }
   function addItem() {
     items.push({text: "", checked: false});

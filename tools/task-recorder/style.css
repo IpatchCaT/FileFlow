@@ -415,3 +415,19 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .heading-card .heading-collapse { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; font-size: 1.3rem; border-radius: 8px; }
 .heading-card .card-header > div { flex: 1; min-width: 0; }
 .heading-card .heading-collapse:focus-visible { outline: 3px solid #75aa87; outline-offset: 3px; }
+
+/* Checklist text grows with its content, including long unbroken words. */
+.editable-check-item { align-items: flex-start; }
+.editable-check-item textarea.checklist-item-input {
+  box-sizing: border-box;
+  display: block;
+  min-height: 38px;
+  max-height: none;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: hidden;
+  resize: none;
+}
+.editable-check-item input[type="checkbox"] { margin-top: 10px; }
