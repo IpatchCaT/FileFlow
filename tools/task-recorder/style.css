@@ -431,3 +431,9 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
   resize: none;
 }
 .editable-check-item input[type="checkbox"] { margin-top: 10px; }
+
+.subheading-body[hidden] { display: none; }
+.subheading-toggle { flex-shrink: 0; width: 32px; height: 32px; padding: 0; font-size: 1.2rem; background: white; color: #315d40; border: 1px solid #b6ccbc; border-radius: 6px; }
+.subheading-toggle:focus-visible { outline: 3px solid #75aa87; outline-offset: 2px; }
+.subheading-bulk { margin-top: 12px; font-size: .8rem; }
+.subheading-body > ul { margin: 8px 0; padding: 0; list-style: none; }

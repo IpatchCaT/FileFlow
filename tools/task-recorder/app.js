@@ -120,7 +120,7 @@ function normalizeHeadings(data) {
       ? [{ id: crypto.randomUUID(), name: "General" }]
       : heading.subheadings;
     if (!Array.isArray(subheadings) || !subheadings.length || subheadings.some(group =>
-      !group || !validId(group.id) || !validText(group.name))) throw new Error("Invalid subheading");
+      !group || !validId(group.id) || !validText(group.name) || !optionalFlag(group.collapsed))) throw new Error("Invalid subheading");
     const tasks = heading.tasks.map(task => {
       const subheadingId = task.subheadingId ?? subheadings[0].id;
       if (!subheadings.some(group => group.id === subheadingId)) throw new Error("Invalid task subheading");
@@ -136,7 +136,7 @@ function normalizeHeadings(data) {
         waitingFor: task.waitingFor ?? "", notes: task.notes ?? "", noteChecks: noteLines(task.notes).map((_, i) => task.noteChecks?.[i] ?? false), link: task.link ?? ""
       };
     });
-    return { id: heading.id, name: heading.name, collapsed: Boolean(heading.collapsed), archived: Boolean(heading.archived), notes: heading.notes ?? "", subheadings: subheadings.map(({id, name}) => ({id, name})), tasks };
+    return { id: heading.id, name: heading.name, collapsed: Boolean(heading.collapsed), archived: Boolean(heading.archived), notes: heading.notes ?? "", subheadings: subheadings.map(({id, name, collapsed}) => ({id, name, collapsed: collapsed ?? true})), tasks };
   });
 }
 
@@ -715,6 +715,14 @@ function headingCard(heading) {
     label.append(progress);
     body.append(label);
   }
+  const allClosed = heading.subheadings.every(group => group.collapsed !== false);
+  const bulkToggle = button(allClosed ? "Open all subheadings" : "Close all subheadings", () => {
+    for (const group of heading.subheadings) group.collapsed = !allClosed;
+    save();
+    byId(`subheading-bulk-${heading.id}`)?.focus();
+  }, "subheading-bulk");
+  body.append(bulkToggle);
+  bulkToggle.id = `subheading-bulk-${heading.id}`;
   for (const group of heading.subheadings) {
     const section = element("section", "subheading-section");
     const groupHeader = element("div", "subheading-header");
@@ -729,10 +737,26 @@ function headingCard(heading) {
       ["Move down", () => reorder(heading.subheadings, group, 1), heading.subheadings.indexOf(group) === heading.subheadings.length - 1],
       ["Delete empty subheading", () => { heading.subheadings = heading.subheadings.filter(item => item !== group); save(); }, items.length > 0 || heading.subheadings.length === 1]
     ]));
-    section.append(groupHeader);
-    const list = taskList(heading, items);
-    section.append(list.children.length ? list : element("p", "small", items.length ? "No matching work items." : "Add your first work item below."));
-    if (!heading.archived) section.append(quickAdd(heading, group));
+    const closed = group.collapsed !== false;
+    const groupBody = element("div", "subheading-body");
+    groupBody.id = `subheading-body-${group.id}`;
+    groupBody.hidden = closed;
+    const toggleGroup = button(closed ? "▸" : "▾", () => {
+      group.collapsed = !closed;
+      save();
+      byId(`subheading-toggle-${group.id}`)?.focus();
+    }, "subheading-toggle");
+    toggleGroup.id = `subheading-toggle-${group.id}`;
+    toggleGroup.setAttribute("aria-expanded", String(!closed));
+    toggleGroup.setAttribute("aria-controls", groupBody.id);
+    toggleGroup.setAttribute("aria-label", `${closed ? "Open" : "Close"} ${group.name} tasks`);
+    groupHeader.prepend(toggleGroup);
+    section.append(groupHeader, groupBody);
+    if (!closed) {
+      const list = taskList(heading, items);
+      groupBody.append(list.children.length ? list : element("p", "small", items.length ? "No matching work items." : "Add your first work item below."));
+      if (!heading.archived) groupBody.append(quickAdd(heading, group));
+    }
     body.append(section);
   }
   if (!heading.archived) body.append(button("+ Add subheading", () => {
