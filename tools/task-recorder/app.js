@@ -616,7 +616,23 @@ function noteEditor(record, label, initialText = record.notes ?? "", onCheck) {
         add.focus();
       }, "checklist-remove");
       remove.setAttribute("aria-label", `Remove checklist item ${index + 1}`);
-      row.append(checkbox, text, remove);
+      const orderControls = element("div", "checklist-order");
+      for (const [offset, symbol, direction] of [[-1, "↑", "up"], [1, "↓", "down"]]) {
+        const move = button(symbol, () => {
+          const destination = index + offset;
+          if (destination < 0 || destination >= items.length) return;
+          [items[index], items[destination]] = [items[destination], items[index]];
+          sync();
+          draw();
+          list.querySelector(`[data-checklist-position="${destination}"] .checklist-item-input`)?.focus();
+        }, "checklist-move");
+        move.disabled = index + offset < 0 || index + offset >= items.length;
+        move.setAttribute("aria-label", `Move checklist item ${index + 1} ${direction}`);
+        move.title = `Move ${direction}`;
+        orderControls.append(move);
+      }
+      row.dataset.checklistPosition = String(index);
+      row.append(checkbox, text, orderControls, remove);
       list.append(row);
     });
     requestAnimationFrame(resizeChecklistFields);
@@ -659,7 +675,7 @@ function notesPanel(record, kind, name) {
   editor.input.id = `notes-${key}`;
   const saveNote = button("Save checklist", () => commit(editor.input.value, editor.getChecks(), `checklist-summary-${record.id}`));
   editor.input.addEventListener("input", () => noteDrafts.set(key, editor.input.value));
-  panel.append(summary, editor.panel, element("p", "small", "Save your edits with Save checklist. Ticking an item saves the current list automatically."), saveNote);
+  panel.append(summary, editor.panel, element("p", "small", "Use ↑ and ↓ to arrange items, then Save checklist. Ticking an item also saves the current list."), saveNote);
   return panel;
 }
 

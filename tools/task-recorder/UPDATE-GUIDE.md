@@ -27,3 +27,8 @@ Every subheading, including General, now has an individual dropdown arrow. Subhe
 Close all subheadings / Open all subheadings operates within the current main heading only. Main heading dropdowns remain independent. Closing sections never deletes work or removes it from records, Today, backups or exports.
 
 Replace index.html, app.js and style.css for this update. Automated checks passed for initial closed state, individual expansion, refresh persistence, bulk open/close, retained data and previous functionality. Live browser appearance remains unverified.
+
+## Arrange checklist items
+Use the ↑ and ↓ buttons beside each checklist row to change its position. Its checked state and text move together. Select Save checklist to keep the new order. In Edit Task, select Save changes; in Quick Add, add the task. The first item's up button and last item's down button are disabled.
+
+Replace index.html, app.js and style.css. Automated tests passed for movement in both directions, boundary controls, checked-state retention and saved order. Live browser appearance remains unverified.

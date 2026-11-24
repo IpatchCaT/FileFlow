@@ -437,3 +437,10 @@ textarea { resize: vertical; font: inherit; padding: .55rem; border: 1px solid v
 .subheading-toggle:focus-visible { outline: 3px solid #75aa87; outline-offset: 2px; }
 .subheading-bulk { margin-top: 12px; font-size: .8rem; }
 .subheading-body > ul { margin: 8px 0; padding: 0; list-style: none; }
+
+.checklist-order { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+.checklist-move { width: 30px; min-height: 28px; padding: 2px; border: 1px solid #b6ccbc; border-radius: 5px; background: #fff; color: #315d40; }
+.checklist-move:hover:not(:disabled) { background: #eaf3eb; border-color: #568365; }
+.checklist-move:disabled { opacity: .35; cursor: default; }
+.checklist-move:focus-visible { outline: 3px solid #75aa87; outline-offset: 2px; }
+@media(max-width: 480px) { .checklist-order { flex-direction: row; margin-left: auto; } .checklist-move { width: 36px; min-height: 36px; } }
